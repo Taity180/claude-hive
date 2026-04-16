@@ -200,7 +200,7 @@ If you prefer not to use the plugin, add this to your `~/.claude/settings.json`:
 
 | Environment Variable | Default | Description |
 |---------------------|---------|-------------|
-| `CLAUDE_HUB_PORT` | `9400` | Port for the HTTP/WebSocket server |
+| `CLAUDE_HIVE_PORT` | `9400` | Port for the HTTP/WebSocket server |
 
 The server binds to `0.0.0.0` by default (accessible on localhost and LAN).
 

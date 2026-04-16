@@ -114,7 +114,7 @@ pub fn run() {
 
     match cli.command {
         Some(Commands::Mcp) => {
-            let port: u16 = std::env::var("CLAUDE_HUB_PORT")
+            let port: u16 = std::env::var("CLAUDE_HIVE_PORT")
                 .ok()
                 .and_then(|p| p.parse().ok())
                 .unwrap_or(9400);
@@ -126,7 +126,7 @@ pub fn run() {
             // Start Axum HTTP+WS server in background
             let state = server::AppState::new();
 
-            let port: u16 = std::env::var("CLAUDE_HUB_PORT")
+            let port: u16 = std::env::var("CLAUDE_HIVE_PORT")
                 .ok()
                 .and_then(|p| p.parse().ok())
                 .unwrap_or(9400);
