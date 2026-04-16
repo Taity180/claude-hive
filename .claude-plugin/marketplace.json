@@ -1,0 +1,17 @@
+{
+  "name": "claude-hive-marketplace",
+  "owner": {
+    "name": "James"
+  },
+  "plugins": [
+    {
+      "name": "claude-hive",
+      "description": "Connect Claude Code sessions to Claude Hive - a floating dashboard for tracking, messaging, and navigating across all your sessions and virtual desktops",
+      "source": "./",
+      "strict": true,
+      "skills": [
+        "./skills/claude-hive"
+      ]
+    }
+  ]
+}

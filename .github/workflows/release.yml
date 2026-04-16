@@ -1,0 +1,157 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Need full history for release notes
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install pnpm
+        run: npm install -g pnpm@9
+
+      - name: Set version from tag
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF#refs/tags/v}"
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          # Update tauri.conf.json version to match the tag
+          node -e "const f='src-tauri/tauri.conf.json'; const c=require('fs').readFileSync(f,'utf8'); const j=JSON.parse(c); j.version='$VERSION'; require('fs').writeFileSync(f, JSON.stringify(j, null, 2));"
+          echo "Set version to $VERSION"
+          cat src-tauri/tauri.conf.json
+
+      - name: Install WiX v3
+        shell: pwsh
+        run: |
+          $wixDir = "$env:LOCALAPPDATA\tauri\WixTools"
+          New-Item -ItemType Directory -Force -Path $wixDir | Out-Null
+          $url = "https://github.com/wixtoolset/wix3/releases/download/wix314rtm/wix314-binaries.zip"
+          Invoke-WebRequest -Uri $url -OutFile wix.zip
+          Expand-Archive -Path wix.zip -DestinationPath $wixDir -Force
+          Write-Host "WiX v3 installed at $wixDir"
+
+      - name: Install NSIS
+        shell: pwsh
+        run: choco install nsis -y --no-progress
+
+      - name: Install frontend dependencies
+        run: pnpm install
+
+      - name: Build Tauri app
+        shell: bash
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: pnpm exec tauri build --target x86_64-pc-windows-msvc --bundles msi --bundles nsis
+
+      - name: Verify bundle files exist
+        shell: pwsh
+        run: |
+          $msiDir = "src-tauri\target\x86_64-pc-windows-msvc\release\bundle\msi"
+          $nsisDir = "src-tauri\target\x86_64-pc-windows-msvc\release\bundle\nsis"
+
+          if (-not (Test-Path $msiDir)) {
+            Write-Error "MSI directory not found: $msiDir"
+            exit 1
+          }
+          if (-not (Test-Path $nsisDir)) {
+            Write-Error "NSIS directory not found: $nsisDir"
+            exit 1
+          }
+
+          $msi = Get-ChildItem $msiDir -Filter "*.msi" | Where-Object { $_.Name -notmatch '\.(sig|zip)$' }
+          $nsis = Get-ChildItem $nsisDir -Filter "*-setup.exe" | Where-Object { $_.Name -notmatch '\.sig$' }
+
+          if (-not $msi) { Write-Error "No MSI file found"; exit 1 }
+          if (-not $nsis) { Write-Error "No NSIS setup.exe found"; exit 1 }
+
+          Write-Host "MSI:  $($msi.FullName)"
+          Write-Host "NSIS: $($nsis.FullName)"
+
+      - name: Generate release notes
+        id: notes
+        shell: bash
+        run: |
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          if [ -z "$PREV_TAG" ]; then
+            COMMITS=$(git log --pretty=format:"- %s" HEAD)
+          else
+            COMMITS=$(git log --pretty=format:"- %s" ${PREV_TAG}..HEAD)
+          fi
+
+          FEATURES=$(echo "$COMMITS" | grep -i "^- feat" || true)
+          FIXES=$(echo "$COMMITS" | grep -i "^- fix" || true)
+          DOCS=$(echo "$COMMITS" | grep -i "^- doc" || true)
+          OTHER=$(echo "$COMMITS" | grep -iv "^- feat\|^- fix\|^- doc" || true)
+
+          {
+            echo "## What's New in ${GITHUB_REF#refs/tags/}"
+            echo ""
+            if [ -n "$FEATURES" ]; then echo "### Features"; echo "$FEATURES"; echo ""; fi
+            if [ -n "$FIXES" ]; then echo "### Bug Fixes"; echo "$FIXES"; echo ""; fi
+            if [ -n "$DOCS" ]; then echo "### Documentation"; echo "$DOCS"; echo ""; fi
+            if [ -n "$OTHER" ]; then echo "### Other"; echo "$OTHER"; echo ""; fi
+            echo "---"
+            echo ""
+            echo "## Installation"
+            echo ""
+            echo "**Windows:** Download the \`.msi\` installer below and run it. The installer adds \`claude-hive\` to your PATH automatically."
+            echo ""
+            echo "After installing, set up the Claude Code plugin:"
+            echo '```'
+            echo "/plugin marketplace add Taity180/claude-hive"
+            echo "/plugin install claude-hive@Taity180-claude-hive"
+            echo '```'
+          } > release_notes.md
+
+          cat release_notes.md
+
+      - name: Create release
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release create "${{ github.ref_name }}" --title "Claude Hive ${{ github.ref_name }}" --notes-file release_notes.md --latest
+
+      - name: Upload installers
+        shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $tag = "${{ github.ref_name }}"
+
+          # Upload MSI
+          $msi = Get-ChildItem "src-tauri\target\x86_64-pc-windows-msvc\release\bundle\msi" -Filter "*.msi" | Where-Object { $_.Name -notmatch '\.(sig|zip)$' } | Select-Object -First 1
+          Write-Host "Uploading MSI: $($msi.FullName)"
+          gh release upload $tag "$($msi.FullName)" --clobber
+
+          # Upload NSIS setup.exe
+          $nsis = Get-ChildItem "src-tauri\target\x86_64-pc-windows-msvc\release\bundle\nsis" -Filter "*-setup.exe" | Where-Object { $_.Name -notmatch '\.sig$' } | Select-Object -First 1
+          Write-Host "Uploading NSIS: $($nsis.FullName)"
+          gh release upload $tag "$($nsis.FullName)" --clobber
+
+          # Upload raw exe as fallback for power users
+          $exe = "src-tauri\target\x86_64-pc-windows-msvc\release\claude-hive.exe"
+          Write-Host "Uploading EXE: $exe"
+          gh release upload $tag $exe --clobber
+
+          Write-Host "Release complete: https://github.com/${{ github.repository }}/releases/tag/$tag"
