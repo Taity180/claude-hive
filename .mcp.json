@@ -1,0 +1,6 @@
+{
+  "claude-hive": {
+    "command": "node",
+    "args": ["${CLAUDE_PLUGIN_ROOT}/mcp-wrapper.mjs"]
+  }
+}

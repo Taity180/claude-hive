@@ -1,0 +1,48 @@
+[package]
+name = "claude-hive"
+version = "1.0.0"
+description = "Claude Hive - Floating dashboard for Claude Code sessions"
+authors = ["James"]
+edition = "2021"
+
+[lib]
+name = "claude_hive_lib"
+crate-type = ["lib", "cdylib", "staticlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon"] }
+tauri-plugin-notification = "2"
+tauri-plugin-shell = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["full"] }
+axum = { version = "0.8", features = ["ws"] }
+tower-http = { version = "0.6", features = ["cors", "fs"] }
+uuid = { version = "1", features = ["v4"] }
+chrono = { version = "0.4", features = ["serde"] }
+clap = { version = "4", features = ["derive"] }
+tracing = "0.1"
+tracing-subscriber = "0.3"
+futures = "0.3"
+reqwest = { version = "0.12", features = ["blocking", "json"] }
+tungstenite = "0.28"
+dirs = "6"
+image = "0.25"
+
+[target.'cfg(windows)'.dependencies]
+winvd = "0.0.48"
+windows = { version = "0.58", features = [
+    "Win32_System_Console",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_Foundation",
+    "Win32_System_Threading",
+    "Win32_System_ProcessStatus",
+    "Win32_System_Diagnostics_ToolHelp",
+] }
+
+[dev-dependencies]
+tokio-test = "0.4"
+axum-test = "20"

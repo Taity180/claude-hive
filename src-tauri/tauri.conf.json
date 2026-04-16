@@ -1,0 +1,49 @@
+{
+  "$schema": "https://raw.githubusercontent.com/tauri-apps/tauri/dev/crates/tauri-config-schema/schema.json",
+  "productName": "Claude Hive",
+  "version": "1.0.0",
+  "identifier": "com.claude-hive.desktop",
+  "build": {
+    "beforeDevCommand": "pnpm dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "pnpm build",
+    "frontendDist": "../dist"
+  },
+  "bundle": {
+    "targets": ["msi", "nsis"],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "windows": {
+      "wix": {
+        "fragmentPaths": ["wix/path-env.wxs"],
+        "componentRefs": ["AddToPath"]
+      },
+      "nsis": {
+        "installMode": "perMachine"
+      }
+    }
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Claude Hive",
+        "width": 500,
+        "height": 520,
+        "resizable": true,
+        "transparent": false,
+        "decorations": false,
+        "alwaysOnTop": true,
+        "skipTaskbar": false
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "plugins": {}
+}
