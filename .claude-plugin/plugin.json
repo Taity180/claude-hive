@@ -1,12 +1,11 @@
 {
   "name": "claude-hive",
   "description": "Connect Claude Code sessions to Claude Hive - a floating dashboard for tracking and messaging across all your sessions",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "author": {
     "name": "James"
   },
   "homepage": "https://github.com/Taity180/claude-hive",
   "license": "MIT",
-  "keywords": ["hive", "dashboard", "sessions", "messaging", "multi-session"],
-  "hooks": "./hooks/hooks.json"
+  "keywords": ["hive", "dashboard", "sessions", "messaging", "multi-session"]
 }
