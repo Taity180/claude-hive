@@ -33,29 +33,50 @@ fn to_logical(physical: u32, scale_factor: f64) -> f64 {
     }
 }
 
-fn window_logical_size(window: &tauri::Window) -> Result<(f64, f64), String> {
-    let monitor = window.current_monitor().map_err(|e| e.to_string())?;
-    let scale = monitor.map(|m| m.scale_factor()).unwrap_or(1.0);
-    let physical = window.outer_size().map_err(|e| e.to_string())?;
-    Ok((to_logical(physical.width, scale), to_logical(physical.height, scale)))
+// Convert a logical pixel dimension to physical pixels, rounding to the
+// nearest u32. Used so resizes round-trip cleanly without floating-point drift.
+fn to_physical(logical: f64, scale_factor: f64) -> u32 {
+    let scale = if scale_factor > 0.0 { scale_factor } else { 1.0 };
+    (logical * scale).round().max(0.0) as u32
 }
 
-/// Resize the window to `height` logical pixels while preserving its current logical width.
-/// Keeps the math on the Rust side so the frontend doesn't need the `core:window` capability
-/// for `currentMonitor` / `outerSize`.
+fn scale_factor(window: &tauri::Window) -> Result<f64, String> {
+    let monitor = window.current_monitor().map_err(|e| e.to_string())?;
+    Ok(monitor.map(|m| m.scale_factor()).unwrap_or(1.0))
+}
+
+/// Resize the window to `height` logical pixels while preserving its current width.
+///
+/// All math happens in physical pixels to avoid a feedback loop that bit 1.0.1:
+/// `outer_size()` on Windows reports a value that includes the non-client frame,
+/// but `set_size()` sets the inner (client) area. Reading outer and writing it
+/// back as a Logical size grew the outer width a few px per call, and because
+/// the ResizeObserver on the collapsed content keeps firing as layout reflows,
+/// the window expanded indefinitely. We now read `inner_size()` (physical) and
+/// hand Tauri a `PhysicalSize` directly so width is preserved bit-for-bit.
 #[tauri::command]
 fn resize_preserving_width(window: tauri::Window, height: f64) -> Result<(), String> {
-    let (width, _) = window_logical_size(&window)?;
+    let scale = scale_factor(&window)?;
+    let current = window.inner_size().map_err(|e| e.to_string())?;
+    let target_height = to_physical(height, scale);
+    if current.height == target_height {
+        return Ok(()); // No-op — skip redundant calls the observer may trigger.
+    }
     window
-        .set_size(tauri::Size::Logical(tauri::LogicalSize { width, height }))
+        .set_size(tauri::Size::Physical(tauri::PhysicalSize {
+            width: current.width,
+            height: target_height,
+        }))
         .map_err(|e| e.to_string())
 }
 
-/// Return the current window size in logical pixels as `[width, height]`.
+/// Return the current window inner size in logical pixels as `[width, height]`.
 /// Used by the frontend to remember the user's expanded height before collapsing.
 #[tauri::command]
 fn get_logical_size(window: tauri::Window) -> Result<(f64, f64), String> {
-    window_logical_size(&window)
+    let scale = scale_factor(&window)?;
+    let physical = window.inner_size().map_err(|e| e.to_string())?;
+    Ok((to_logical(physical.width, scale), to_logical(physical.height, scale)))
 }
 
 #[tauri::command]
@@ -304,5 +325,44 @@ mod tests {
         // raw physical value rather than dividing by zero.
         assert_eq!(to_logical(800, 0.0), 800.0);
         assert_eq!(to_logical(800, -1.0), 800.0);
+    }
+
+    #[test]
+    fn to_physical_multiplies_and_rounds_to_u32() {
+        assert_eq!(to_physical(1920.0, 1.0), 1920);
+        assert_eq!(to_physical(1600.0, 1.5), 2400);
+        assert_eq!(to_physical(400.25, 2.0), 801); // 800.5 rounds up
+        assert_eq!(to_physical(400.2, 2.0), 800); // 800.4 rounds down
+    }
+
+    #[test]
+    fn to_physical_falls_back_when_scale_is_zero_or_negative() {
+        assert_eq!(to_physical(800.0, 0.0), 800);
+        assert_eq!(to_physical(800.0, -2.0), 800);
+    }
+
+    #[test]
+    fn to_physical_clamps_negative_inputs_to_zero() {
+        // Defensive: a negative computed height would wrap to a huge u32.
+        assert_eq!(to_physical(-10.0, 1.5), 0);
+    }
+
+    #[test]
+    fn logical_physical_round_trip_is_stable() {
+        // The 1.0.1 bug was a round-trip that drifted because we used
+        // set_size(Logical) where Logical → Physical rounding could grow the
+        // stored size. With to_physical used for the write path, re-reading
+        // via to_logical and writing back lands on the same physical value.
+        for &physical_width in &[500u32, 501, 523, 1234, 1600, 1919, 3840] {
+            for &scale in &[1.0, 1.25, 1.5, 1.75, 2.0] {
+                let logical = to_logical(physical_width, scale);
+                let back = to_physical(logical, scale);
+                assert_eq!(
+                    back, physical_width,
+                    "round trip drifted for physical={} scale={}",
+                    physical_width, scale
+                );
+            }
+        }
     }
 }
