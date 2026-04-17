@@ -1,4 +1,5 @@
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { useHubStore } from "./stores/hubStore";
 import { useWebSocket } from "./hooks/useWebSocket";
 import { useTheme } from "./hooks/useTheme";
@@ -7,37 +8,62 @@ import { ExpandedDashboard } from "./components/ExpandedDashboard";
 import { SessionDetail } from "./components/SessionDetail";
 import { Settings } from "./components/Settings";
 
-function WindowBar() {
+// Vertical padding contributed by the scroll wrapper (`p-1` → 4px top + 4px bottom).
+// Kept in one place so the sizing math stays in sync with the JSX below.
+const SCROLL_WRAPPER_PADDING_Y = 8;
+
+async function invokeCommand<T = void>(
+  cmd: string,
+  args?: Record<string, unknown>
+): Promise<T | null> {
+  try {
+    return (await invoke(cmd, args)) as T;
+  } catch (err) {
+    console.error(`[hive] invoke(${cmd}) failed:`, err);
+    return null;
+  }
+}
+
+interface WindowBarProps {
+  barRef: React.RefObject<HTMLDivElement | null>;
+  captureExpandedHeight: () => Promise<void>;
+}
+
+function WindowBar({ barRef, captureExpandedHeight }: WindowBarProps) {
   const viewState = useHubStore((s) => s.viewState);
   const setViewState = useHubStore((s) => s.setViewState);
   const setActiveSession = useHubStore((s) => s.setActiveSession);
   const sessions = useHubStore((s) => s.sessions);
 
-  const invokeRef = useRef<((cmd: string) => Promise<void>) | null>(null);
-
-  // Pre-load invoke so all window ops are instant
-  useEffect(() => {
-    import("@tauri-apps/api/core").then((mod) => {
-      invokeRef.current = mod.invoke;
-    }).catch(() => {});
-  }, []);
-
   const handleMinimize = () => {
-    invokeRef.current?.("minimize_window");
+    void invokeCommand("minimize_window");
   };
 
   const handleClose = () => {
-    invokeRef.current?.("hide_window");
+    void invokeCommand("hide_window");
   };
 
   const handleDragStart = (e: React.MouseEvent) => {
     if (e.button !== 0) return;
     if ((e.target as HTMLElement).closest("button")) return;
-    invokeRef.current?.("start_dragging");
+    void invokeCommand("start_dragging");
+  };
+
+  const handleCollapse = async () => {
+    // Capture the user's current expanded height before collapsing so
+    // "Expand" returns the window to exactly where they left it.
+    await captureExpandedHeight();
+    setViewState("collapsed");
+  };
+
+  const handleExpand = () => {
+    // The expand effect in <App> restores the persisted height.
+    setViewState("expanded");
   };
 
   return (
     <div
+      ref={barRef}
       onMouseDown={handleDragStart}
       className="flex items-center gap-2 px-3 py-1.5 shrink-0 select-none cursor-grab active:cursor-grabbing"
       style={{
@@ -115,28 +141,7 @@ function WindowBar() {
       )}
       {viewState === "expanded" && (
         <button
-          onClick={async () => {
-            setViewState("collapsed");
-            try {
-              const { invoke } = await import("@tauri-apps/api/core");
-              const { currentMonitor } = await import("@tauri-apps/api/window");
-              const monitor = await currentMonitor();
-              const scaleFactor = monitor?.scaleFactor ?? 1;
-              // Get current physical size to preserve width
-              const win = (await import("@tauri-apps/api/window")).getCurrentWindow();
-              const size = await win.outerSize();
-              const currentWidth = size.width / scaleFactor;
-              // Window bar ~34px + pill row ~28px per row + padding
-              // Estimate: each row of pills is ~28px, with wrapping
-              const sessionCount = sessions.length || 1;
-              const pillsPerRow = Math.max(1, Math.floor(currentWidth / 120));
-              const rows = Math.ceil(sessionCount / pillsPerRow);
-              const contentHeight = rows * 30 + 16; // pills + padding
-              const waitingBanner = sessions.some(s => s.status === "waiting_for_input" || s.status === "error") ? 32 : 0;
-              const totalHeight = 34 + contentHeight + waitingBanner + 8;
-              await invoke("resize_window", { width: currentWidth, height: Math.max(totalHeight, 70) });
-            } catch {}
-          }}
+          onClick={handleCollapse}
           className="text-[10px] px-1.5 py-0.5 rounded transition-opacity hover:opacity-80"
           style={{
             background: "var(--hub-surface, rgba(255,255,255,0.06))",
@@ -148,19 +153,7 @@ function WindowBar() {
       )}
       {viewState === "collapsed" && (
         <button
-          onClick={async () => {
-            setViewState("expanded");
-            try {
-              const { invoke } = await import("@tauri-apps/api/core");
-              const { currentMonitor } = await import("@tauri-apps/api/window");
-              const monitor = await currentMonitor();
-              const scaleFactor = monitor?.scaleFactor ?? 1;
-              const win = (await import("@tauri-apps/api/window")).getCurrentWindow();
-              const size = await win.outerSize();
-              const currentWidth = size.width / scaleFactor;
-              await invoke("resize_window", { width: currentWidth, height: 520 });
-            } catch {}
-          }}
+          onClick={handleExpand}
           className="text-[10px] px-1.5 py-0.5 rounded transition-opacity hover:opacity-80"
           style={{
             background: "var(--hub-surface, rgba(255,255,255,0.06))",
@@ -202,9 +195,11 @@ function App() {
 
   const viewState = useHubStore((s) => s.viewState);
   const sessions = useHubStore((s) => s.sessions);
+  const expandedHeight = useHubStore((s) => s.expandedHeight);
+  const setExpandedHeight = useHubStore((s) => s.setExpandedHeight);
 
-  // No auto-resize — user controls the window size.
-  // Initial size is set in tauri.conf.json (500x520).
+  const windowBarRef = useRef<HTMLDivElement>(null);
+  const collapsedContentRef = useRef<HTMLDivElement>(null);
 
   // Update tray badge when attention count changes
   const attentionCount = sessions.filter(
@@ -212,20 +207,57 @@ function App() {
   ).length;
 
   useEffect(() => {
-    async function updateBadge() {
-      try {
-        const { invoke } = await import("@tauri-apps/api/core");
-        await invoke("update_tray_badge", { count: attentionCount });
-      } catch {}
-    }
-    updateBadge();
+    void invokeCommand("update_tray_badge", { count: attentionCount });
   }, [attentionCount]);
+
+  // Snapshot the current window height so "Expand" can later restore it.
+  const captureExpandedHeight = useCallback(async () => {
+    const size = await invokeCommand<[number, number]>("get_logical_size");
+    if (size) {
+      const [, height] = size;
+      setExpandedHeight(height);
+    }
+  }, [setExpandedHeight]);
+
+  // While collapsed, resize the OS window to hug the real pill content. Uses
+  // a ResizeObserver so the window also tightens up when pills wrap onto a
+  // different number of rows (width change, new session, etc).
+  useEffect(() => {
+    if (viewState !== "collapsed") return;
+    const bar = windowBarRef.current;
+    const content = collapsedContentRef.current;
+    if (!bar || !content) return;
+
+    let cancelled = false;
+    const applyHeight = () => {
+      if (cancelled) return;
+      const height = Math.ceil(
+        bar.offsetHeight + content.offsetHeight + SCROLL_WRAPPER_PADDING_Y
+      );
+      void invokeCommand("resize_preserving_width", { height });
+    };
+
+    applyHeight();
+    const observer = new ResizeObserver(applyHeight);
+    observer.observe(content);
+    return () => {
+      cancelled = true;
+      observer.disconnect();
+    };
+  }, [viewState, sessions.length]);
+
+  // When switching to expanded (from collapsed/settings/detail), restore the
+  // user's last remembered expanded height.
+  useEffect(() => {
+    if (viewState !== "expanded") return;
+    void invokeCommand("resize_preserving_width", { height: expandedHeight });
+  }, [viewState, expandedHeight]);
 
   return (
     <div className="h-screen w-screen overflow-hidden flex flex-col" style={{ background: "var(--hub-bg-solid, #141414)" }}>
-      <WindowBar />
+      <WindowBar barRef={windowBarRef} captureExpandedHeight={captureExpandedHeight} />
       <div className="flex-1 overflow-auto p-1">
-        {viewState === "collapsed" && <CollapsedBar />}
+        {viewState === "collapsed" && <CollapsedBar ref={collapsedContentRef} />}
         {viewState === "expanded" && <ExpandedDashboard />}
         {viewState === "session-detail" && <SessionDetail />}
         {viewState === "settings" && <Settings />}

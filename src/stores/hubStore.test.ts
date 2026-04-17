@@ -1,5 +1,9 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { useHubStore } from "./hubStore";
+import {
+  useHubStore,
+  DEFAULT_EXPANDED_HEIGHT,
+  MIN_EXPANDED_HEIGHT,
+} from "./hubStore";
 import type { Session, Message } from "../types";
 
 const mockSession: Session = {
@@ -33,6 +37,7 @@ describe("hubStore", () => {
       messages: {},
       viewState: "collapsed",
       activeSessionId: null,
+      expandedHeight: DEFAULT_EXPANDED_HEIGHT,
     });
   });
 
@@ -86,5 +91,27 @@ describe("hubStore", () => {
   it("setActiveSession(null) switches to expanded view", () => {
     useHubStore.getState().setActiveSession(null);
     expect(useHubStore.getState().viewState).toBe("expanded");
+  });
+
+  it("expandedHeight defaults to DEFAULT_EXPANDED_HEIGHT", () => {
+    expect(useHubStore.getState().expandedHeight).toBe(DEFAULT_EXPANDED_HEIGHT);
+  });
+
+  it("setExpandedHeight stores the given value", () => {
+    useHubStore.getState().setExpandedHeight(640);
+    expect(useHubStore.getState().expandedHeight).toBe(640);
+  });
+
+  it("setExpandedHeight clamps to MIN_EXPANDED_HEIGHT", () => {
+    useHubStore.getState().setExpandedHeight(50);
+    expect(useHubStore.getState().expandedHeight).toBe(MIN_EXPANDED_HEIGHT);
+  });
+
+  it("setViewState transitions from collapsed to expanded", () => {
+    expect(useHubStore.getState().viewState).toBe("collapsed");
+    useHubStore.getState().setViewState("expanded");
+    expect(useHubStore.getState().viewState).toBe("expanded");
+    useHubStore.getState().setViewState("collapsed");
+    expect(useHubStore.getState().viewState).toBe("collapsed");
   });
 });

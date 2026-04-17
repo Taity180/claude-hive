@@ -23,9 +23,39 @@ enum Commands {
     Mcp,
 }
 
+// Convert a physical pixel dimension to logical pixels given the monitor's scale factor.
+// Extracted so the math can be unit tested without a live webview.
+fn to_logical(physical: u32, scale_factor: f64) -> f64 {
+    if scale_factor > 0.0 {
+        physical as f64 / scale_factor
+    } else {
+        physical as f64
+    }
+}
+
+fn window_logical_size(window: &tauri::Window) -> Result<(f64, f64), String> {
+    let monitor = window.current_monitor().map_err(|e| e.to_string())?;
+    let scale = monitor.map(|m| m.scale_factor()).unwrap_or(1.0);
+    let physical = window.outer_size().map_err(|e| e.to_string())?;
+    Ok((to_logical(physical.width, scale), to_logical(physical.height, scale)))
+}
+
+/// Resize the window to `height` logical pixels while preserving its current logical width.
+/// Keeps the math on the Rust side so the frontend doesn't need the `core:window` capability
+/// for `currentMonitor` / `outerSize`.
 #[tauri::command]
-fn resize_window(window: tauri::Window, width: f64, height: f64) {
-    let _ = window.set_size(tauri::Size::Logical(tauri::LogicalSize { width, height }));
+fn resize_preserving_width(window: tauri::Window, height: f64) -> Result<(), String> {
+    let (width, _) = window_logical_size(&window)?;
+    window
+        .set_size(tauri::Size::Logical(tauri::LogicalSize { width, height }))
+        .map_err(|e| e.to_string())
+}
+
+/// Return the current window size in logical pixels as `[width, height]`.
+/// Used by the frontend to remember the user's expanded height before collapsing.
+#[tauri::command]
+fn get_logical_size(window: tauri::Window) -> Result<(f64, f64), String> {
+    window_logical_size(&window)
 }
 
 #[tauri::command]
@@ -241,9 +271,38 @@ pub fn run() {
 
                     Ok(())
                 })
-                .invoke_handler(tauri::generate_handler![resize_window, configure_claude_code, navigate_to_session, minimize_window, hide_window, start_dragging, update_tray_badge])
+                .invoke_handler(tauri::generate_handler![
+                    resize_preserving_width,
+                    get_logical_size,
+                    configure_claude_code,
+                    navigate_to_session,
+                    minimize_window,
+                    hide_window,
+                    start_dragging,
+                    update_tray_badge
+                ])
                 .run(tauri::generate_context!())
                 .expect("error while running tauri application");
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn to_logical_divides_by_scale_factor() {
+        assert_eq!(to_logical(1920, 1.0), 1920.0);
+        assert_eq!(to_logical(3840, 2.0), 1920.0);
+        assert_eq!(to_logical(2400, 1.5), 1600.0);
+    }
+
+    #[test]
+    fn to_logical_falls_back_when_scale_is_zero_or_negative() {
+        // Defensive: if the monitor reports a bogus scale factor we return the
+        // raw physical value rather than dividing by zero.
+        assert_eq!(to_logical(800, 0.0), 800.0);
+        assert_eq!(to_logical(800, -1.0), 800.0);
     }
 }

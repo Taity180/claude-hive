@@ -106,8 +106,10 @@ Every connected Claude Code session appears in the dashboard with a color-coded 
 
 - **Always-on-top** window that follows across virtual desktops
 - **Custom frameless design** with drag-to-move
-- **Auto-resizes** based on content — grows with sessions, shrinks when they disconnect
-- **Collapsed mode** shows just session pills; expand for full detail
+- **Collapse / Expand** toggles between a pill-only strip and the full dashboard
+  - Collapsed mode fits the window height to the real pill content (including wrap rows and the "waiting" banner)
+  - The window width is preserved across transitions — resize it once, it stays where you put it
+  - Expanding restores the exact height you had before collapsing
 - **Minimize to tray** — always accessible from the system tray
 
 ### Chat Messaging
@@ -234,6 +236,7 @@ claude-hive/
 │   │   ├── state/           # In-memory session registry + message store
 │   │   ├── desktop/         # Virtual desktop navigation (Win/Mac/Linux)
 │   │   └── tray_badge.rs    # Dynamic tray icon badge generation
+│   ├── capabilities/        # Tauri v2 ACL — what Tauri APIs the UI may call
 │   ├── tests/               # Integration tests
 │   └── Cargo.toml
 ├── src/                     # React frontend

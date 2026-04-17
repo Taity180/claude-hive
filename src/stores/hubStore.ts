@@ -1,15 +1,26 @@
 import { create } from "zustand";
 import type { Session, Message, ViewState, WsEvent } from "../types";
 
+// Minimum sensible height for the expanded dashboard. Guards against a bad
+// value being persisted (e.g. someone resized the window to almost nothing
+// before collapsing) and then being restored on expand.
+export const MIN_EXPANDED_HEIGHT = 200;
+// Default height used when we have no record of the user's previous size.
+// Must match the initial height in tauri.conf.json so first-collapse → first-expand
+// returns the window to its startup dimensions.
+export const DEFAULT_EXPANDED_HEIGHT = 520;
+
 interface HubState {
   sessions: Session[];
   messages: Record<string, Message[]>;
   viewState: ViewState;
   activeSessionId: string | null;
   unreadSessions: Set<string>;
+  expandedHeight: number;
 
   setViewState: (view: ViewState) => void;
   setActiveSession: (sessionId: string | null) => void;
+  setExpandedHeight: (height: number) => void;
   handleWsEvent: (event: WsEvent) => void;
   addUserMessage: (sessionId: string, message: Message) => void;
   setSessions: (sessions: Session[]) => void;
@@ -24,8 +35,12 @@ export const useHubStore = create<HubState>((set) => ({
   viewState: "collapsed",
   activeSessionId: null,
   unreadSessions: new Set(),
+  expandedHeight: DEFAULT_EXPANDED_HEIGHT,
 
   setViewState: (viewState) => set({ viewState }),
+
+  setExpandedHeight: (height) =>
+    set({ expandedHeight: Math.max(MIN_EXPANDED_HEIGHT, height) }),
 
   setActiveSession: (activeSessionId) =>
     set((state) => ({
