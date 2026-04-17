@@ -246,10 +246,12 @@ function App() {
     };
   }, [viewState, sessions.length]);
 
-  // When switching to expanded (from collapsed/settings/detail), restore the
-  // user's last remembered expanded height.
+  // Whenever we're in a "big" view (expanded, session-detail, settings),
+  // restore the user's last remembered expanded height. This means clicking
+  // a session pill from collapsed mode auto-grows the window to fit the
+  // message feed, rather than keeping the tiny collapsed height.
   useEffect(() => {
-    if (viewState !== "expanded") return;
+    if (viewState === "collapsed") return;
     void invokeCommand("resize_preserving_width", { height: expandedHeight });
   }, [viewState, expandedHeight]);
 

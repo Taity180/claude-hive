@@ -11,7 +11,9 @@ vi.mock("@tauri-apps/api/core", () => ({
 // Keep the app under test isolated from the real WebSocket / notification /
 // theme subsystems — those have their own coverage.
 vi.mock("./hooks/useWebSocket", () => ({ useWebSocket: () => {} }));
-vi.mock("./hooks/useTheme", () => ({ useTheme: () => {} }));
+vi.mock("./hooks/useTheme", () => ({
+  useTheme: () => ({ theme: { id: "default" }, setTheme: () => {} }),
+}));
 
 import { invoke } from "@tauri-apps/api/core";
 import App from "./App";
@@ -76,6 +78,50 @@ describe("App window sizing", () => {
     await waitFor(() => {
       expect(invokeMock).toHaveBeenCalledWith("resize_preserving_width", {
         height: customHeight,
+      });
+    });
+  });
+
+  it("auto-expands when clicking a session pill from collapsed mode", async () => {
+    const rememberedHeight = 540;
+    useHubStore.setState({
+      expandedHeight: rememberedHeight,
+      viewState: "collapsed",
+    });
+    render(<App />);
+    invokeMock.mockClear();
+
+    // setActiveSession flips viewState to "session-detail" — the regression
+    // we're guarding against is the window staying at its tiny collapsed
+    // height when the message feed is now visible.
+    await act(async () => {
+      useHubStore.getState().setActiveSession("s1");
+    });
+
+    await waitFor(() => {
+      expect(useHubStore.getState().viewState).toBe("session-detail");
+      expect(invokeMock).toHaveBeenCalledWith("resize_preserving_width", {
+        height: rememberedHeight,
+      });
+    });
+  });
+
+  it("restores expanded height when entering settings view", async () => {
+    const rememberedHeight = 480;
+    useHubStore.setState({
+      expandedHeight: rememberedHeight,
+      viewState: "collapsed",
+    });
+    render(<App />);
+    invokeMock.mockClear();
+
+    await act(async () => {
+      useHubStore.getState().setViewState("settings");
+    });
+
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith("resize_preserving_width", {
+        height: rememberedHeight,
       });
     });
   });
