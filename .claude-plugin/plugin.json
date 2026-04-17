@@ -1,7 +1,7 @@
 {
   "name": "claude-hive",
   "description": "Connect Claude Code sessions to Claude Hive - a floating dashboard for tracking and messaging across all your sessions",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "author": {
     "name": "James"
   },
