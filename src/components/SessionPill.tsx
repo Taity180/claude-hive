@@ -54,7 +54,13 @@ export function SessionPill({ name, status, hasUnread, windowHandle, onClick }: 
             try {
               const { invoke } = await import("@tauri-apps/api/core");
               await invoke("navigate_to_session", { sessionHandle: windowHandle });
-            } catch {}
+            } catch (err) {
+              // Most common cause: the stored HWND is stale (terminal
+              // restarted, Windows Terminal tab shuffled, etc). Surfacing
+              // the error tells the user to restart the session instead
+              // of clicking into the void.
+              console.error("[hive] navigate_to_session failed:", err);
+            }
           }}
           onKeyDown={(e) => {
             if (e.key === "Enter" || e.key === " ") {
@@ -62,7 +68,9 @@ export function SessionPill({ name, status, hasUnread, windowHandle, onClick }: 
               e.preventDefault();
               import("@tauri-apps/api/core")
                 .then(({ invoke }) => invoke("navigate_to_session", { sessionHandle: windowHandle }))
-                .catch(() => {});
+                .catch((err) => {
+                  console.error("[hive] navigate_to_session failed:", err);
+                });
             }
           }}
           className="text-[9px] rounded px-0.5 transition-opacity opacity-40 hover:!opacity-90 cursor-pointer"
