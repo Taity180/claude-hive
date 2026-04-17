@@ -1,7 +1,8 @@
+import { forwardRef } from "react";
 import { useHubStore } from "../stores/hubStore";
 import { SessionPill } from "./SessionPill";
 
-export function CollapsedBar() {
+export const CollapsedBar = forwardRef<HTMLDivElement>(function CollapsedBar(_props, ref) {
   const sessions = useHubStore((s) => s.sessions);
   const setActiveSession = useHubStore((s) => s.setActiveSession);
   const unreadSessions = useHubStore((s) => s.unreadSessions);
@@ -11,7 +12,7 @@ export function CollapsedBar() {
   );
 
   return (
-    <div className="px-3 py-2 overflow-y-auto">
+    <div ref={ref} className="px-3 py-2">
       <div className="flex flex-wrap gap-1.5 items-center">
         {sessions.map((session) => (
           <SessionPill
@@ -48,4 +49,4 @@ export function CollapsedBar() {
       )}
     </div>
   );
-}
+});
