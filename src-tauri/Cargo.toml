@@ -1,6 +1,6 @@
 [package]
 name = "claude-hive"
-version = "1.0.2"
+version = "1.0.3"
 description = "Claude Hive - Floating dashboard for Claude Code sessions"
 authors = ["James"]
 edition = "2021"
