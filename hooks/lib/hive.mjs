@@ -59,12 +59,18 @@ export function readEvent() {
 }
 
 /**
- * Stable per-Claude-Code-session key used to name claim files. Falls back to
- * the working directory so a payload without a session_id still gets a key,
- * just a coarser one.
+ * Stable per-Claude-Code-session key used to name claim files, or null when
+ * the payload carries no session id.
+ *
+ * The whole point of a claim is that it's unique to one Claude Code session.
+ * Deriving a key from the working directory instead would hand two sessions in
+ * the same repo the *same* claim file — exactly the shared state this replaced.
+ * So a payload without a session id gets no claim, and its hooks fall back to
+ * acting only when a single session unambiguously matches the directory.
  */
 export function claimKey(event) {
-  const raw = event?.session_id || `cwd-${eventCwd(event)}`;
+  const raw = event?.session_id;
+  if (!raw) return null;
   return String(raw).replace(/[^A-Za-z0-9_-]/g, "_").slice(0, 120);
 }
 
@@ -81,9 +87,19 @@ function claimPathFor(key) {
   return join(claimDir(), `${key}${CLAIM_SUFFIX}`);
 }
 
-/** Path of this session's "a permission prompt is pending" flag. */
+function sanitize(value) {
+  return String(value).replace(/[^A-Za-z0-9_-]/g, "_").slice(0, 120);
+}
+
+/**
+ * Path of this session's "a permission prompt is pending" flag. Unlike a
+ * claim, this may fall back to the working directory: the worst a shared flag
+ * can do is let one session clear another's, and PostToolUse still has to
+ * resolve a session before it acts on it.
+ */
 export function pendingPath(event) {
-  return join(claimDir(), `${claimKey(event)}.pending`);
+  const key = claimKey(event) ?? `cwd-${sanitize(eventCwd(event))}`;
+  return join(claimDir(), `${key}.pending`);
 }
 
 function readFileOrNull(path) {
@@ -164,11 +180,12 @@ async function fetchSessions(url) {
  *   Destructive hooks (SessionEnd) pass `requireUnambiguous` as well so they
  *   never delete a sibling session's pill on a guess.
  * @param {boolean} [options.requireUnambiguous=false] Only claim when exactly
- *   one unclaimed session matches this working directory.
+ *   one unclaimed session matches this working directory. Forced on when the
+ *   payload has no session id and there is therefore nothing to claim with.
  * @returns {Promise<{id: string, session: object, url: string} | null>}
  */
 export async function resolveSession(event, options = {}) {
-  const { claim = true, requireUnambiguous = false } = options;
+  const { claim = true } = options;
   const url = hiveUrl();
 
   const sessions = await fetchSessions(url);
@@ -176,15 +193,20 @@ export async function resolveSession(event, options = {}) {
 
   const byId = new Map(sessions.map((s) => [s.id, s]));
   const key = claimKey(event);
-  const path = claimPathFor(key);
+  // Without a claim key we can't tell ourselves apart from a sibling session,
+  // so only act when exactly one session matches the directory.
+  const requireUnambiguous = options.requireUnambiguous || key === null;
 
-  // An existing claim wins as long as the hive still knows that session.
-  const claimed = readFileOrNull(path);
-  if (claimed) {
-    const session = byId.get(claimed);
-    if (session) return { id: claimed, session, url };
-    // Hive restarted and handed out fresh ids — drop the claim and re-claim.
-    removeFile(path);
+  if (key !== null) {
+    const path = claimPathFor(key);
+    // An existing claim wins as long as the hive still knows that session.
+    const claimed = readFileOrNull(path);
+    if (claimed) {
+      const session = byId.get(claimed);
+      if (session) return { id: claimed, session, url };
+      // Hive restarted and handed out fresh ids — drop the claim and re-claim.
+      removeFile(path);
+    }
   }
 
   if (!claim) return null;
@@ -205,6 +227,10 @@ export async function resolveSession(event, options = {}) {
   if (requireUnambiguous && free.length > 1) return null;
 
   let chosen = free[0];
+  // No key means no claim to record — the unambiguous check above is the only
+  // thing standing between us and a sibling's session, and it passed.
+  if (key === null) return { id: chosen.id, session: chosen, url };
+
   if (!writeClaim(key, chosen.id)) return null;
 
   // Two sessions starting at the same instant can both pick the same slot.
@@ -213,7 +239,7 @@ export async function resolveSession(event, options = {}) {
   const rivals = otherClaims(key, new Set(byId.keys()));
   const rivalKey = rivals.get(chosen.id);
   if (rivalKey && rivalKey < key) {
-    removeFile(path);
+    removeFile(claimPathFor(key));
     const next = free.find((s) => s.id !== chosen.id && !rivals.has(s.id));
     if (!next) return null;
     if (!writeClaim(key, next.id)) return null;
@@ -247,7 +273,8 @@ export async function deleteSession(url, sessionId) {
 
 /** Drop this Claude Code session's claim and pending flag. */
 export function releaseClaim(event) {
-  removeFile(claimPathFor(claimKey(event)));
+  const key = claimKey(event);
+  if (key !== null) removeFile(claimPathFor(key));
   removeFile(pendingPath(event));
 }
 

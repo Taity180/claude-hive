@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { mkdtempSync, rmSync, existsSync, readFileSync } from "fs";
+import { mkdtempSync, rmSync, existsSync, readFileSync, readdirSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
 
@@ -170,7 +170,45 @@ describe("claimKey", () => {
     expect(claimKey({ session_id: "a/b\\c:d" })).toBe("a_b_c_d");
   });
 
-  it("falls back to the working directory when there is no session id", () => {
-    expect(claimKey({ cwd: CWD })).toContain("cwd-");
+  it("is null when the payload carries no session id", () => {
+    expect(claimKey({ cwd: CWD })).toBeNull();
+  });
+});
+
+describe("payloads without a session id", () => {
+  // Nothing unique to key a claim on, so these hooks must not claim at all —
+  // a directory-derived key would be shared by every session in the repo,
+  // which is the bug the claim mechanism exists to prevent.
+  const noId = { cwd: CWD };
+
+  it("still resolves when a single session matches the directory", async () => {
+    vi.stubGlobal("fetch", stubSessions([session("hive-1")]));
+
+    expect((await resolveSession(noId))?.id).toBe("hive-1");
+  });
+
+  it("writes no claim file", async () => {
+    vi.stubGlobal("fetch", stubSessions([session("hive-1")]));
+    await resolveSession(noId);
+
+    expect(readdirSync(stateDir).filter((f) => f.endsWith(".session"))).toEqual([]);
+  });
+
+  it("refuses to resolve when the directory holds more than one session", async () => {
+    vi.stubGlobal("fetch", stubSessions([session("hive-1"), session("hive-2")]));
+
+    expect(await resolveSession(noId)).toBeNull();
+  });
+
+  it("does not steal a session already claimed by an identified sibling", async () => {
+    vi.stubGlobal("fetch", stubSessions([session("hive-1")]));
+    await resolveSession({ session_id: "claude-a", cwd: CWD });
+
+    expect(await resolveSession(noId)).toBeNull();
+  });
+
+  it("keeps a working pending flag path", () => {
+    expect(pendingPath(noId)).toContain(".pending");
+    expect(pendingPath(noId)).not.toContain("null");
   });
 });
