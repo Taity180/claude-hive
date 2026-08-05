@@ -17,10 +17,8 @@ export const CollapsedBar = forwardRef<HTMLDivElement>(function CollapsedBar(_pr
         {sessions.map((session) => (
           <SessionPill
             key={session.id}
-            name={session.customName || session.projectName}
-            status={session.status}
+            session={session}
             hasUnread={unreadSessions.has(session.id)}
-            windowHandle={session.windowHandle}
             onClick={() => setActiveSession(session.id)}
           />
         ))}

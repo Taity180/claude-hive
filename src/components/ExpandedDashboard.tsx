@@ -1,107 +1,9 @@
-import { useState, useRef, useEffect } from "react";
+import { useState } from "react";
 import { createPortal } from "react-dom";
 import { useHubStore } from "../stores/hubStore";
 import { SessionPill } from "./SessionPill";
-import { api } from "../api";
+import { InlineRename } from "./InlineRename";
 import type { Session, SessionViewMode } from "../types";
-
-function displayName(session: Session): string {
-  return session.customName || session.projectName;
-}
-
-function InlineRename({ session, className, style }: {
-  session: Session;
-  className?: string;
-  style?: React.CSSProperties;
-}) {
-  const [editing, setEditing] = useState(false);
-  const [value, setValue] = useState("");
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    if (editing && inputRef.current) {
-      inputRef.current.focus();
-      inputRef.current.select();
-    }
-  }, [editing]);
-
-  const save = async () => {
-    setEditing(false);
-    const trimmed = value.trim();
-    const name = trimmed === session.projectName ? "" : trimmed;
-    await fetch(`${api.baseUrl}/api/sessions/${session.id}/name`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name }),
-    });
-    // Update local store
-    useHubStore.getState().renameSession(session.id, name || null);
-  };
-
-  if (editing) {
-    return (
-      <input
-        ref={inputRef}
-        value={value}
-        onChange={(e) => setValue(e.target.value)}
-        onBlur={save}
-        onKeyDown={(e) => {
-          e.stopPropagation();
-          if (e.key === "Enter") save();
-          if (e.key === "Escape") setEditing(false);
-        }}
-        onKeyUp={(e) => {
-          e.stopPropagation();
-          if (e.key === " ") e.preventDefault();
-        }}
-        className={className}
-        style={{
-          ...style,
-          background: "var(--hub-surface, rgba(255,255,255,0.1))",
-          border: "1px solid var(--hub-accent, #60a5fa)",
-          borderRadius: 4,
-          outline: "none",
-          padding: "0 4px",
-          width: "100%",
-          maxWidth: 180,
-        }}
-        onClick={(e) => e.stopPropagation()}
-      />
-    );
-  }
-
-  return (
-    <>
-      <span className={className} style={style}>
-        {displayName(session)}
-      </span>
-      <span
-        role="button"
-        tabIndex={0}
-        onClick={(e) => {
-          e.stopPropagation();
-          setValue(displayName(session));
-          setEditing(true);
-        }}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            e.stopPropagation();
-            e.preventDefault();
-            setValue(displayName(session));
-            setEditing(true);
-          }
-        }}
-        className="shrink-0 opacity-0 group-hover:opacity-40 hover:!opacity-90 transition-opacity cursor-pointer"
-        title="Rename session"
-      >
-        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="var(--hub-text-muted, #777)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
-          <path d="m15 5 4 4" />
-        </svg>
-      </span>
-    </>
-  );
-}
 
 const statusLegend = [
   { color: "#60a5fa", label: "Running", desc: "Actively working" },
@@ -136,10 +38,8 @@ function GridView({ sessions }: { sessions: Session[] }) {
       {sessions.map((session) => (
         <SessionPill
           key={session.id}
-          name={displayName(session)}
-          status={session.status}
+          session={session}
           hasUnread={unreadSessions.has(session.id)}
-          windowHandle={session.windowHandle}
           onClick={() => setActiveSession(session.id)}
         />
       ))}

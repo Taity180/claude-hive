@@ -4,34 +4,22 @@
 // Cleanly unregisters the session from the hive so it disappears from the
 // dashboard immediately, rather than waiting for the server's stale-session
 // pruner to remove it after a timeout.
+//
+// Deleting is destructive, so this is the one hook that will not guess. It
+// uses the claim this session established earlier, and only falls back to
+// claiming when exactly one unclaimed session matches this directory. If it
+// can't tell which session is ours, it leaves everything alone and lets the
+// pruner clean up — better a pill that lingers for a minute than one that
+// vanishes out of a session the user is still working in.
 
-let input = "";
-process.stdin.on("data", (chunk) => (input += chunk));
-process.stdin.on("end", async () => {
-  const port = process.env.CLAUDE_HIVE_PORT || "9400";
-  const hiveUrl = `http://localhost:${port}`;
-  const cwd = process.cwd();
+import { readEvent, resolveSession, deleteSession, releaseClaim } from "./lib/hive.mjs";
 
-  try {
-    const sessionsResp = await fetch(`${hiveUrl}/api/sessions`, {
-      signal: AbortSignal.timeout(1000),
-    });
-    if (!sessionsResp.ok) return;
+const event = await readEvent();
+if (!event) process.exit(0);
 
-    const sessions = await sessionsResp.json();
-    const session = sessions.find((s) => {
-      const sessionDir = (s.workingDirectory || "").replace(/\\/g, "/").toLowerCase();
-      const currentDir = cwd.replace(/\\/g, "/").toLowerCase();
-      return sessionDir === currentDir;
-    });
+const resolved = await resolveSession(event, { requireUnambiguous: true });
+releaseClaim(event);
 
-    if (!session) return;
+if (!resolved) process.exit(0);
 
-    await fetch(`${hiveUrl}/api/sessions/${session.id}`, {
-      method: "DELETE",
-      signal: AbortSignal.timeout(1000),
-    });
-  } catch {
-    // Silently fail — session pruner will eventually clean up.
-  }
-});
+await deleteSession(resolved.url, resolved.id);

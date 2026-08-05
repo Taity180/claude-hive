@@ -180,8 +180,19 @@ The plugin's session-start hook instructs Claude to use these tools proactively 
 The Claude Code plugin handles everything automatically:
 
 - **MCP server config** — registers the `claude-hive mcp` process
-- **Session-start hook** — checks hub connectivity and injects behavioral instructions
+- **Hooks** — five lifecycle hooks keep the dashboard honest even when Claude forgets to call a tool:
+  | Hook | What it does |
+  |------|--------------|
+  | `SessionStart` | Checks hub connectivity, injects behavioral instructions, claims this session's dashboard pill |
+  | `PreToolUse` | Flags `waiting_for_input` before an Edit/Write/Bash that may need your permission |
+  | `PostToolUse` | Clears that flag once the tool goes through |
+  | `Stop` | Falls the pill back to `idle` if Claude ended its turn still marked `running` |
+  | `SessionEnd` | Unregisters the session so its pill disappears immediately |
 - **Skill** — provides setup guidance and usage reference
+
+#### Multiple sessions in one repo
+
+Hooks only know Claude Code's session id; the hive issues its own. To pair them, the first hook of each Claude Code session **claims** an unclaimed hive session registered from the same working directory and records it under `~/.claude/hive-hooks/`. Claims are one-to-one and are released on `SessionEnd`, so two Claude Code sessions open in the same repo can never overwrite each other's status or delete each other's pill. When a session can't be identified unambiguously, the hooks do nothing and let the server's stale-session pruner clean up.
 
 ### Manual Configuration
 
@@ -203,6 +214,7 @@ If you prefer not to use the plugin, add this to your `~/.claude/settings.json`:
 | Environment Variable | Default | Description |
 |---------------------|---------|-------------|
 | `CLAUDE_HIVE_PORT` | `9400` | Port for the HTTP/WebSocket server |
+| `CLAUDE_HIVE_STATE_DIR` | `~/.claude/hive-hooks` | Where the hooks store per-session claim files |
 
 The server binds to `0.0.0.0` by default (accessible on localhost and LAN).
 
@@ -249,7 +261,8 @@ claude-hive/
 │   └── types/               # TypeScript types
 ├── .claude-plugin/          # Plugin metadata (marketplace + plugin.json)
 ├── .mcp.json                # MCP server configuration
-├── hooks/                   # Session-start hook
+├── hooks/                   # Claude Code lifecycle hooks
+│   └── lib/hive.mjs         # Shared session-claim + hive API helpers
 ├── skills/                  # Behavioral skill
 └── .github/workflows/       # CI/CD
 ```
