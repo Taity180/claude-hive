@@ -11,7 +11,7 @@ You are connected to Claude Hive, a floating dashboard that the user monitors ac
 
 If this is the first time using Claude Hive and the user asks to set it up:
 
-1. Check if the hive is running: `curl -s http://localhost:9400/api/health`
+1. Check if the hive is running: `curl -s http://localhost:9400/api/health` (or `$CLAUDE_HIVE_PORT` if the user has overridden the default port)
 2. If not running, tell the user: "Please start the Claude Hive desktop app first."
 3. If running, the MCP server is already configured via this plugin. New sessions will auto-connect.
 
@@ -56,9 +56,9 @@ Status updates with detail text automatically appear in the session's message fe
 
 ---
 
-### hub_send_message — Keep the user informed
+### hub_send_message — MANDATORY for every meaningful step
 
-Send a message to the hive chat feed. The user reads these across many sessions to stay informed.
+Send a message to the hive chat feed. The user reads these across many sessions to stay informed — this is where they follow your work, not the terminal.
 
 **Parameters:**
 | Param | Type | Required | Description |
@@ -66,19 +66,19 @@ Send a message to the hive chat feed. The user reads these across many sessions 
 | `message` | string | Yes | The message content |
 | `type` | string | No | One of: `info`, `question`, `completion`, `error`. Default: `info` |
 
-**When to send messages — every 1-3 significant actions:**
+**Send one at minimum for each of these moments:**
 
 | Situation | Message | Type |
 |-----------|---------|------|
 | Starting a task | "Starting auth middleware refactor" | `info` |
-| Completed a step | "Auth middleware refactored, 8 tests passing" | `completion` |
-| Found something notable | "Found 3 unused imports, cleaning up" | `info` |
-| Hit a problem | "Build failing — missing express-session" | `error` |
-| Need user input | "Should I use JWT or session cookies?" | `question` |
+| Completing a step | "Auth middleware refactored, 8 tests passing" | `completion` |
+| Finding something notable | "Found 3 unused imports, cleaning up" | `info` |
+| Hitting a problem | "Build failing — missing express-session" | `error` |
+| Needing user input | "Should I use JWT or session cookies?" | `question` |
 | Waiting for permission | "Waiting for permission to run npm install" | `info` |
 | All work done | "All done — auth system implemented with tests" | `completion` |
 
-**Cadence:** Not every file read, but every meaningful step. If you read 5 files, send one message about what you learned. If you edit 3 files, send one message about the change. Think: "Would the user want to know about this?"
+**Cadence:** at least 1 message per 1-3 tool calls, and always at least one per user request. Not every file read — if you read 5 files, send one message about what you learned. If you finish a user request without a single `hub_send_message` call, you failed this requirement.
 
 ---
 
@@ -99,9 +99,9 @@ Retrieve messages sent to your session from the hive dashboard or from other ses
 
 ---
 
-### hub_notify — Desktop notifications for important events
+### hub_notify — MANDATORY for task completion and blocking events
 
-Trigger a native desktop notification on the user's machine.
+Trigger a native desktop notification on the user's machine. Call this at least once per user request, typically on completion — the user may be on a different virtual desktop and has no other way to know you need them.
 
 **Parameters:**
 | Param | Type | Required | Description |
@@ -110,11 +110,12 @@ Trigger a native desktop notification on the user's machine.
 | `body` | string | Yes | Notification body text |
 | `priority` | string | No | One of: `low`, `normal`, `high`. Default: `normal` |
 
-**When to call:**
-- Task **fully completed** — the user may be on another desktop
+**Always call for:**
+- Task **fully completed** — every user request ends with one
 - **Blocking error** that needs immediate attention
 - **Urgent question** that stops all progress
-- Do NOT use for routine progress — that's what `hub_send_message` is for
+
+Do NOT use it for routine mid-task progress — that's what `hub_send_message` is for. But do not skip the completion notification: a silent finish leaves the user unaware you're done.
 
 ---
 
@@ -154,10 +155,10 @@ User asks: "Add input validation to the signup form"
 ## Key Behaviors
 
 1. **Update status on every activity change** — the user watches the dashboard, not this terminal
-2. **Send messages for meaningful steps** — every 1-3 actions, not every file read
+2. **Send a message for every meaningful step** — at least 1 per 1-3 tool calls, and never finish a user request with zero
 3. **Be specific in detail fields** — "Reading auth.ts" not just "Reading files"
 4. **Set waiting_for_input when blocked** — including when waiting for tool permissions
 5. **Set error immediately when things fail** — with a summary of what went wrong
 6. **Set idle when done** — so the user knows you're available
 7. **Check messages at natural breakpoints** — between tasks, when idle
-8. **Notify only for important events** — task complete, blocking errors, urgent questions
+8. **Notify at least once per request** — always on completion, plus blocking errors and urgent questions

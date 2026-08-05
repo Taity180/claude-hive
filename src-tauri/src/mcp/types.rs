@@ -50,7 +50,7 @@ impl JsonRpcResponse {
 pub const MCP_TOOLS: &[ToolDef] = &[
     ToolDef {
         name: "hub_send_message",
-        description: "Send a message to the Claude Hive chat feed. Use this to report progress, ask questions, or share completions.",
+        description: "REQUIRED throughout every task. Post a progress message to the Claude Hive feed, which is where the user follows your work — they are usually not watching this terminal. Send one when starting a task, on each meaningful step, when you hit a problem, and when you finish: at least 1 per 1-3 tool calls, and never zero for a user request.",
         schema: r#"{
             "type": "object",
             "properties": {
@@ -62,7 +62,7 @@ pub const MCP_TOOLS: &[ToolDef] = &[
     },
     ToolDef {
         name: "hub_set_status",
-        description: "Update this session's status indicator on the Claude Hive dashboard.",
+        description: "REQUIRED on every state change. Update this session's status pill on the Claude Hive dashboard so the user can see at a glance which sessions are working and which need them. Call it before reading, editing, or running commands, when you start planning, when you become blocked, and when you finish. Always include a specific `detail`.",
         schema: r#"{
             "type": "object",
             "properties": {
@@ -74,7 +74,7 @@ pub const MCP_TOOLS: &[ToolDef] = &[
     },
     ToolDef {
         name: "hub_get_messages",
-        description: "Retrieve messages sent to this session from the hub (user replies, broadcasts from other sessions).",
+        description: "Retrieve messages sent to this session from the hub (user replies typed into the dashboard, broadcasts from other sessions). Check at session start, between tasks, and whenever you are idle — the user may have queued instructions you have not seen.",
         schema: r#"{
             "type": "object",
             "properties": {
@@ -85,7 +85,7 @@ pub const MCP_TOOLS: &[ToolDef] = &[
     },
     ToolDef {
         name: "hub_notify",
-        description: "Trigger a desktop notification on the user's machine.",
+        description: "REQUIRED at least once per user request, normally on completion. Fires a native desktop notification, the only signal that reaches the user when they are on a different virtual desktop. Also use it for a blocking error or an urgent question. Do not use it for routine mid-task progress — that is hub_send_message.",
         schema: r#"{
             "type": "object",
             "properties": {

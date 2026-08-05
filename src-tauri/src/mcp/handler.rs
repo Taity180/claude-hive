@@ -533,33 +533,7 @@ impl McpHandler {
             if let Ok(session) = resp.json::<Value>() {
                 self.session_id = session["id"].as_str().map(|s| s.to_string());
                 eprintln!("[claude-hive] Registered as session: {}", self.session_id.as_deref().unwrap_or("?"));
-
-                // Persist session_id to a file so hooks can call the hive API directly
-                if let Some(ref id) = self.session_id {
-                    Self::save_session_file(id, &self.hub_url);
-                }
             }
-        }
-    }
-
-    /// Write session_id and hub_url to ~/.claude/hive-active-session
-    /// so that Claude Code hooks can update the hive status directly.
-    fn save_session_file(session_id: &str, hub_url: &str) {
-        if let Some(home) = dirs::home_dir() {
-            let dir = home.join(".claude");
-            let _ = std::fs::create_dir_all(&dir);
-            let path = dir.join("hive-active-session");
-            let content = format!("{}\n{}", session_id, hub_url);
-            if std::fs::write(&path, &content).is_ok() {
-                eprintln!("[claude-hive] Saved session file: {}", path.display());
-            }
-        }
-    }
-
-    fn remove_session_file() {
-        if let Some(home) = dirs::home_dir() {
-            let path = home.join(".claude").join("hive-active-session");
-            let _ = std::fs::remove_file(&path);
         }
     }
 
@@ -569,7 +543,6 @@ impl McpHandler {
                 .client
                 .delete(format!("{}/api/sessions/{}", self.hub_url, id))
                 .send();
-            Self::remove_session_file();
         }
     }
 

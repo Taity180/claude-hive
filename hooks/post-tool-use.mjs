@@ -2,58 +2,31 @@
 
 // Fires after a tool succeeds. If the PreToolUse hook set "waiting_for_input"
 // (for a permission prompt), this resets the status back to "running".
-// Uses a flag file to avoid overriding Claude's explicit status updates.
+// Uses a per-session flag file to avoid overriding Claude's explicit status
+// updates — and to avoid one session clearing another session's flag.
 
-import { readFileSync, unlinkSync, existsSync } from "fs";
-import { join } from "path";
-import { homedir } from "os";
+import { existsSync } from "fs";
 
-const FLAG_FILE = join(homedir(), ".claude", "hive-permission-pending");
+import {
+  readEvent,
+  resolveSession,
+  setStatus,
+  pendingPath,
+  removeFile,
+} from "./lib/hive.mjs";
 
-let input = "";
-process.stdin.on("data", (chunk) => (input += chunk));
-process.stdin.on("end", async () => {
-  // Only act if the PreToolUse hook flagged a permission wait
-  if (!existsSync(FLAG_FILE)) return;
+const event = await readEvent();
+if (!event) process.exit(0);
 
-  // Clear the flag
-  try {
-    unlinkSync(FLAG_FILE);
-  } catch {}
+// Only act if this session's PreToolUse hook flagged a permission wait
+const flag = pendingPath(event);
+if (!existsSync(flag)) process.exit(0);
+removeFile(flag);
 
-  const port = process.env.CLAUDE_HIVE_PORT || "9400";
-  const hiveUrl = `http://localhost:${port}`;
-  const cwd = process.cwd();
+const resolved = await resolveSession(event);
+if (!resolved) process.exit(0);
 
-  try {
-    const sessionsResp = await fetch(`${hiveUrl}/api/sessions`, {
-      signal: AbortSignal.timeout(1000),
-    });
-    if (!sessionsResp.ok) return;
+// Only reset if still stuck on waiting_for_input
+if (resolved.session.status !== "waiting_for_input") process.exit(0);
 
-    const sessions = await sessionsResp.json();
-    const session = sessions.find((s) => {
-      const sessionDir = (s.workingDirectory || "").replace(/\\/g, "/").toLowerCase();
-      const currentDir = cwd.replace(/\\/g, "/").toLowerCase();
-      return sessionDir === currentDir;
-    });
-
-    if (!session) return;
-
-    // Only reset if still stuck on waiting_for_input
-    if (session.status !== "waiting_for_input") return;
-
-    await fetch(`${hiveUrl}/api/sessions/${session.id}/status`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        status: "running",
-        detail: "Resumed",
-        silent: true,
-      }),
-      signal: AbortSignal.timeout(1000),
-    });
-  } catch {
-    // Silently fail
-  }
-});
+await setStatus(resolved.url, resolved.id, "running", "Resumed");

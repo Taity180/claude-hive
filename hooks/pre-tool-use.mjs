@@ -5,79 +5,42 @@
 // If the tool is auto-approved, the PostToolUse hook quickly resets the status.
 // If the tool needs permission, the status stays visible on the dashboard.
 
-import { writeFileSync, mkdirSync } from "fs";
-import { join } from "path";
-import { homedir } from "os";
+import { mkdirSync, writeFileSync } from "fs";
+import { dirname } from "path";
 
-const FLAG_FILE = join(homedir(), ".claude", "hive-permission-pending");
+import { readEvent, resolveSession, setStatus, pendingPath } from "./lib/hive.mjs";
 
-let input = "";
-process.stdin.on("data", (chunk) => (input += chunk));
-process.stdin.on("end", async () => {
-  let event;
-  try {
-    event = JSON.parse(input);
-  } catch {
-    return;
-  }
+const event = await readEvent();
+if (!event) process.exit(0);
 
-  const toolName = event.tool_name;
+// Only notify for tools that commonly need user permission
+if (!["Edit", "Write", "Bash"].includes(event.tool_name)) {
+  process.exit(0);
+}
 
-  // Only notify for tools that commonly need user permission
-  if (!["Edit", "Write", "Bash"].includes(toolName)) {
-    return;
-  }
+const resolved = await resolveSession(event);
+if (!resolved) process.exit(0);
 
-  const port = process.env.CLAUDE_HIVE_PORT || "9400";
-  const hiveUrl = `http://localhost:${port}`;
-  const cwd = process.cwd();
+// Build a detail string from the tool input
+const toolInput = event.tool_input || {};
+let detail;
 
-  try {
-    // Find our session by matching working directory
-    const sessionsResp = await fetch(`${hiveUrl}/api/sessions`, {
-      signal: AbortSignal.timeout(1000),
-    });
-    if (!sessionsResp.ok) return;
+if (event.tool_name === "Bash") {
+  const cmd = toolInput.command || "";
+  const shortCmd = cmd.length > 50 ? cmd.slice(0, 50) + "..." : cmd;
+  detail = `Waiting for permission to run: ${shortCmd}`;
+} else {
+  const verb = event.tool_name === "Edit" ? "edit" : "write";
+  const fileName = (toolInput.file_path || "file").split(/[/\\]/).pop();
+  detail = `Waiting for permission to ${verb} ${fileName}`;
+}
 
-    const sessions = await sessionsResp.json();
-    const session = sessions.find((s) => {
-      const sessionDir = (s.workingDirectory || "").replace(/\\/g, "/").toLowerCase();
-      const currentDir = cwd.replace(/\\/g, "/").toLowerCase();
-      return sessionDir === currentDir;
-    });
+await setStatus(resolved.url, resolved.id, "waiting_for_input", detail);
 
-    if (!session) return;
-
-    // Build a detail string from the tool input
-    let detail;
-    const toolInput = event.tool_input || {};
-
-    if (toolName === "Edit") {
-      const fileName = (toolInput.file_path || "file").split(/[/\\]/).pop();
-      detail = `Waiting for permission to edit ${fileName}`;
-    } else if (toolName === "Write") {
-      const fileName = (toolInput.file_path || "file").split(/[/\\]/).pop();
-      detail = `Waiting for permission to write ${fileName}`;
-    } else if (toolName === "Bash") {
-      const cmd = toolInput.command || "";
-      const shortCmd = cmd.length > 50 ? cmd.slice(0, 50) + "..." : cmd;
-      detail = `Waiting for permission to run: ${shortCmd}`;
-    }
-
-    // Set status to waiting_for_input
-    await fetch(`${hiveUrl}/api/sessions/${session.id}/status`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: "waiting_for_input", detail, silent: true }),
-      signal: AbortSignal.timeout(1000),
-    });
-
-    // Write flag so PostToolUse knows to reset status after tool completes
-    try {
-      mkdirSync(join(homedir(), ".claude"), { recursive: true });
-      writeFileSync(FLAG_FILE, session.id);
-    } catch {}
-  } catch {
-    // Silently fail - never block tool execution
-  }
-});
+// Flag this session (not the machine) so PostToolUse knows to reset the status
+// once the tool completes.
+try {
+  const path = pendingPath(event);
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, resolved.id);
+} catch {}

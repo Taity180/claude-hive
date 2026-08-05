@@ -12,43 +12,17 @@
 // pulse yellow every time Claude finishes any task, which is the bug this
 // hook used to have.
 
-let input = "";
-process.stdin.on("data", (chunk) => (input += chunk));
-process.stdin.on("end", async () => {
-  const port = process.env.CLAUDE_HIVE_PORT || "9400";
-  const hiveUrl = `http://localhost:${port}`;
-  const cwd = process.cwd();
+import { readEvent, resolveSession, setStatus } from "./lib/hive.mjs";
 
-  try {
-    const sessionsResp = await fetch(`${hiveUrl}/api/sessions`, {
-      signal: AbortSignal.timeout(1000),
-    });
-    if (!sessionsResp.ok) return;
+const event = await readEvent();
+if (!event) process.exit(0);
 
-    const sessions = await sessionsResp.json();
-    const session = sessions.find((s) => {
-      const sessionDir = (s.workingDirectory || "").replace(/\\/g, "/").toLowerCase();
-      const currentDir = cwd.replace(/\\/g, "/").toLowerCase();
-      return sessionDir === currentDir;
-    });
+const resolved = await resolveSession(event);
+if (!resolved) process.exit(0);
 
-    if (!session) return;
+// Only update if Claude left the status on running/thinking (meaning it forgot
+// to update). Don't override idle/error/waiting_for_input.
+const { status } = resolved.session;
+if (status !== "running" && status !== "thinking") process.exit(0);
 
-    // Only update if Claude left the status on running/thinking
-    // (meaning it forgot to update). Don't override idle/error/waiting_for_input.
-    if (session.status !== "running" && session.status !== "thinking") return;
-
-    await fetch(`${hiveUrl}/api/sessions/${session.id}/status`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        status: "idle",
-        detail: "Task complete",
-        silent: true,
-      }),
-      signal: AbortSignal.timeout(1000),
-    });
-  } catch {
-    // Silently fail
-  }
-});
+await setStatus(resolved.url, resolved.id, "idle", "Task complete");
