@@ -46,6 +46,10 @@ pub fn create_router(state: AppState, static_dir: Option<std::path::PathBuf>) ->
         .route("/api/sessions/{session_id}/messages/user", post(send_user_message))
         .route("/api/sessions/{session_id}/broadcast", post(broadcast_message))
         .route("/api/sessions/{session_id}/notify", post(notify))
+        .route("/api/questions", get(list_pending_questions))
+        .route("/api/sessions/{session_id}/ask", post(ask_question))
+        .route("/api/sessions/{session_id}/ask", get(get_question))
+        .route("/api/sessions/{session_id}/ask/answer", post(answer_question))
         .route("/ws", get(websocket::ws_handler))
         .layer(CorsLayer::permissive())
         .with_state(state);

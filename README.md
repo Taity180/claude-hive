@@ -112,10 +112,18 @@ Every connected Claude Code session appears in the dashboard with a color-coded 
   - Expanding restores the exact height you had before collapsing
 - **Minimize to tray** — always accessible from the system tray
 
+### Interactive Questions
+
+When a session needs a decision, Claude calls `hub_ask` and the question appears on the dashboard as clickable options — right in the collapsed bar, so you can answer without expanding the window or switching desktops.
+
+The tool call **blocks until you click**, so the session genuinely waits for you rather than guessing. Answering it releases the session and flips its status pill back to running; the status is driven by the question itself, not by Claude remembering to update it. If you do not answer before the timeout (5 minutes by default), the call returns "No answer" and Claude falls back to asking in the terminal.
+
+Single-select answers send on click. Multi-select accumulates and sends on **Send**.
+
 ### Chat Messaging
 
 - **Session to Hub**: Claude reports progress, asks questions, flags errors
-- **You to Session**: Reply to any session directly from the dashboard
+- **You to Session**: Reply to any session by typing in the box at the bottom of its detail view
 - **Broadcast**: Send a message to all sessions at once
 - **Cross-session**: Sessions can broadcast to coordinate with each other
 
@@ -163,12 +171,13 @@ Access the dashboard from any device on your local network at `http://192.168.x.
 
 ## MCP Tools
 
-When connected, Claude Code gets 5 tools it uses proactively:
+When connected, Claude Code gets 6 tools it uses proactively:
 
 | Tool | Purpose |
 |------|---------|
 | `hub_send_message` | Report progress, ask questions, flag completions/errors |
 | `hub_set_status` | Update the session's status indicator on the dashboard |
+| `hub_ask` | Ask you a multiple-choice question and block until you click an answer |
 | `hub_get_messages` | Check for messages you sent from the dashboard |
 | `hub_notify` | Trigger a desktop notification for important events |
 | `hub_broadcast` | Send a message to all other connected sessions |

@@ -4,7 +4,7 @@ import {
   DEFAULT_EXPANDED_HEIGHT,
   MIN_EXPANDED_HEIGHT,
 } from "./hubStore";
-import type { Session, Message } from "../types";
+import type { Session, Message, Question } from "../types";
 
 const mockSession: Session = {
   id: "s1",
@@ -113,5 +113,90 @@ describe("hubStore", () => {
     expect(useHubStore.getState().viewState).toBe("expanded");
     useHubStore.getState().setViewState("collapsed");
     expect(useHubStore.getState().viewState).toBe("collapsed");
+  });
+});
+
+const mockQuestion: Question = {
+  id: "q1",
+  sessionId: "s1",
+  question: "JWT or session cookies?",
+  options: ["JWT", "Session cookies"],
+  multiSelect: false,
+  askedAt: "2026-04-12T00:00:00Z",
+  answer: null,
+  answeredAt: null,
+};
+
+describe("hubStore questions", () => {
+  beforeEach(() => {
+    useHubStore.setState({
+      sessions: [mockSession],
+      messages: {},
+      questions: {},
+      unreadSessions: new Set(),
+      activeSessionId: null,
+      viewState: "collapsed",
+    });
+  });
+
+  it("questionAsked stores the question against its session", () => {
+    useHubStore.getState().handleWsEvent({ type: "questionAsked", question: mockQuestion });
+
+    expect(useHubStore.getState().questions.s1).toEqual(mockQuestion);
+  });
+
+  it("questionAsked marks the session unread so the pill flags it", () => {
+    useHubStore.getState().handleWsEvent({ type: "questionAsked", question: mockQuestion });
+
+    expect(useHubStore.getState().unreadSessions.has("s1")).toBe(true);
+  });
+
+  it("questionAsked does not mark unread while that session is open", () => {
+    useHubStore.setState({ activeSessionId: "s1", viewState: "session-detail" });
+
+    useHubStore.getState().handleWsEvent({ type: "questionAsked", question: mockQuestion });
+
+    expect(useHubStore.getState().unreadSessions.has("s1")).toBe(false);
+  });
+
+  it("questionAnswered clears the prompt", () => {
+    useHubStore.setState({ questions: { s1: mockQuestion } });
+
+    useHubStore.getState().handleWsEvent({
+      type: "questionAnswered",
+      sessionId: "s1",
+      questionId: "q1",
+      answer: ["JWT"],
+    });
+
+    expect(useHubStore.getState().questions.s1).toBeUndefined();
+  });
+
+  it("a late answer for a replaced question leaves the newer prompt alone", () => {
+    const newer = { ...mockQuestion, id: "q2" };
+    useHubStore.setState({ questions: { s1: newer } });
+
+    useHubStore.getState().handleWsEvent({
+      type: "questionAnswered",
+      sessionId: "s1",
+      questionId: "q1",
+      answer: ["JWT"],
+    });
+
+    expect(useHubStore.getState().questions.s1).toEqual(newer);
+  });
+
+  it("a disconnecting session takes its question with it", () => {
+    useHubStore.setState({ questions: { s1: mockQuestion } });
+
+    useHubStore.getState().handleWsEvent({ type: "sessionDisconnected", sessionId: "s1" });
+
+    expect(useHubStore.getState().questions.s1).toBeUndefined();
+  });
+
+  it("setPendingQuestions rebuilds the map from a fetched list", () => {
+    useHubStore.getState().setPendingQuestions([mockQuestion]);
+
+    expect(useHubStore.getState().questions).toEqual({ s1: mockQuestion });
   });
 });

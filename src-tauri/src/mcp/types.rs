@@ -97,6 +97,26 @@ pub const MCP_TOOLS: &[ToolDef] = &[
         }"#,
     },
     ToolDef {
+        name: "hub_ask",
+        description: "Ask the user a multiple-choice question on the Claude Hive dashboard and WAIT for their answer — this call blocks until they click an option, then returns their choice. Use it instead of asking in the terminal whenever you need a decision, because the user is usually on another virtual desktop where terminal output is invisible to them. Give 2-8 concrete options. Returns 'No answer' if they don't respond before the timeout, in which case fall back to asking in the terminal.",
+        schema: r#"{
+            "type": "object",
+            "properties": {
+                "question": { "type": "string", "description": "The question, phrased so the options make sense as answers" },
+                "options": {
+                    "type": "array",
+                    "items": { "type": "string" },
+                    "minItems": 2,
+                    "maxItems": 8,
+                    "description": "Short, concrete choices. For a yes/no question pass exactly two."
+                },
+                "multi_select": { "type": "boolean", "default": false, "description": "Let the user pick more than one option" },
+                "timeout_seconds": { "type": "number", "default": 300, "description": "How long to wait before giving up (10-1800)" }
+            },
+            "required": ["question", "options"]
+        }"#,
+    },
+    ToolDef {
         name: "hub_broadcast",
         description: "Send a message to ALL other connected Claude sessions for cross-session coordination.",
         schema: r#"{

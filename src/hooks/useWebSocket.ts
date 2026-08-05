@@ -44,6 +44,13 @@ export function useWebSocket() {
         .then((r) => r.json())
         .then((sessions) => useHubStore.getState().setSessions(sessions))
         .catch(() => {});
+      // A session can be blocked on a question asked before this dashboard
+      // opened (or while it was reconnecting), and the asking event is long
+      // gone from the WebSocket. Fetch whatever is still outstanding.
+      fetch(`${api.baseUrl}/api/questions`)
+        .then((r) => r.json())
+        .then((questions) => useHubStore.getState().setPendingQuestions(questions))
+        .catch(() => {});
     };
 
     ws.onmessage = (event) => {
@@ -53,6 +60,16 @@ export function useWebSocket() {
 
         if (wsEvent.type === "notification") {
           showNotification(wsEvent.title, wsEvent.body);
+        } else if (wsEvent.type === "questionAsked") {
+          // A blocked session is the most urgent thing the hub can surface —
+          // notify regardless of which desktop the user is on.
+          const session = useHubStore
+            .getState()
+            .sessions.find((s) => s.id === wsEvent.question.sessionId);
+          showNotification(
+            session?.customName || session?.projectName || "Session",
+            wsEvent.question.question
+          );
         } else if (
           wsEvent.type === "statusChanged" &&
           (wsEvent.status === "waiting_for_input" || wsEvent.status === "error")

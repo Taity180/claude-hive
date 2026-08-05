@@ -17,7 +17,7 @@ If this is the first time using Claude Hive and the user asks to set it up:
 
 ## MCP Tools Reference
 
-You have 5 tools from the `claude-hive` MCP server. Use them **proactively** — don't wait to be asked.
+You have 6 tools from the `claude-hive` MCP server. Use them **proactively** — don't wait to be asked.
 
 ---
 
@@ -79,6 +79,34 @@ Send a message to the hive chat feed. The user reads these across many sessions 
 | All work done | "All done — auth system implemented with tests" | `completion` |
 
 **Cadence:** at least 1 message per 1-3 tool calls, and always at least one per user request. Not every file read — if you read 5 files, send one message about what you learned. If you finish a user request without a single `hub_send_message` call, you failed this requirement.
+
+---
+
+### hub_ask — Ask a question and WAIT for the answer
+
+Post a multiple-choice question to the dashboard. **This call blocks** until the user clicks an option, then returns their choice — so use it instead of asking in the terminal whenever you need a decision. The user is usually on a different virtual desktop, where terminal output is invisible to them.
+
+**Parameters:**
+| Param | Type | Required | Description |
+|-------|------|----------|-------------|
+| `question` | string | Yes | Phrase it so the options read as answers |
+| `options` | string[] | Yes | 2–8 short, concrete choices. Yes/no is just two options |
+| `multi_select` | boolean | No | Let the user pick more than one. Default: `false` |
+| `timeout_seconds` | number | No | How long to wait, 10–1800. Default: `300` |
+
+**Behaviour worth knowing:**
+- The session's status pill goes yellow while the question is pending and back to running once answered — you don't need a separate `hub_set_status` call around it.
+- Asking a second question replaces the first. Don't stack questions; ask one, act on the answer.
+- Returns `No answer within Ns` on timeout. Fall back to asking in the terminal — don't guess and don't re-ask in a loop.
+- For anything that isn't a small set of choices, ask in the terminal or send a `hub_send_message` question and let the user type a reply.
+
+```
+hub_ask({
+  question: "JWT or session cookies for auth?",
+  options: ["JWT", "Session cookies"]
+})
+→ "User selected: JWT"
+```
 
 ---
 

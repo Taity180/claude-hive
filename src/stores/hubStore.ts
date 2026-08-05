@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { Session, Message, ViewState, WsEvent } from "../types";
+import type { Session, Message, Question, ViewState, WsEvent } from "../types";
 
 // Minimum sensible height for the expanded dashboard. Guards against a bad
 // value being persisted (e.g. someone resized the window to almost nothing
@@ -13,6 +13,8 @@ export const DEFAULT_EXPANDED_HEIGHT = 520;
 interface HubState {
   sessions: Session[];
   messages: Record<string, Message[]>;
+  /** The unanswered question per session, if it has one. */
+  questions: Record<string, Question>;
   viewState: ViewState;
   activeSessionId: string | null;
   unreadSessions: Set<string>;
@@ -25,13 +27,24 @@ interface HubState {
   addUserMessage: (sessionId: string, message: Message) => void;
   setSessions: (sessions: Session[]) => void;
   setMessages: (sessionId: string, messages: Message[]) => void;
+  setPendingQuestions: (questions: Question[]) => void;
   renameSession: (sessionId: string, name: string | null) => void;
   clearMessages: (sessionId: string) => void;
+}
+
+/** Drop one session's question from the map. */
+function withoutQuestion(
+  questions: Record<string, Question>,
+  sessionId: string,
+): Record<string, Question> {
+  const { [sessionId]: _removed, ...rest } = questions;
+  return rest;
 }
 
 export const useHubStore = create<HubState>((set) => ({
   sessions: [],
   messages: {},
+  questions: {},
   viewState: "collapsed",
   activeSessionId: null,
   unreadSessions: new Set(),
@@ -58,6 +71,11 @@ export const useHubStore = create<HubState>((set) => ({
     set((state) => ({
       messages: { ...state.messages, [sessionId]: messages },
     })),
+
+  setPendingQuestions: (questions) =>
+    set({
+      questions: Object.fromEntries(questions.map((q) => [q.sessionId, q])),
+    }),
 
   addUserMessage: (sessionId, message) =>
     set((state) => ({
@@ -97,6 +115,7 @@ export const useHubStore = create<HubState>((set) => ({
                 ([id]) => id !== event.sessionId
               )
             ),
+            questions: withoutQuestion(state.questions, event.sessionId),
             unreadSessions: new Set(
               [...state.unreadSessions].filter((id) => id !== event.sessionId)
             ),
@@ -136,6 +155,29 @@ export const useHubStore = create<HubState>((set) => ({
 
         case "notification":
           return {};
+
+        case "questionAsked": {
+          const { question } = event;
+          // A question always deserves attention, even if the user happens to
+          // be looking at another session.
+          const isViewingThis =
+            state.activeSessionId === question.sessionId &&
+            state.viewState === "session-detail";
+          return {
+            questions: { ...state.questions, [question.sessionId]: question },
+            unreadSessions: isViewingThis
+              ? state.unreadSessions
+              : new Set([...state.unreadSessions, question.sessionId]),
+          };
+        }
+
+        case "questionAnswered": {
+          // Ignore an answer for a question that has already been superseded,
+          // otherwise a late event would clear the newer prompt.
+          const current = state.questions[event.sessionId];
+          if (!current || current.id !== event.questionId) return {};
+          return { questions: withoutQuestion(state.questions, event.sessionId) };
+        }
 
         default:
           return {};
