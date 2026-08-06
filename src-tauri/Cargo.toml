@@ -1,6 +1,6 @@
 [package]
 name = "claude-hive"
-version = "1.0.6"
+version = "1.0.7"
 description = "Claude Hive - Floating dashboard for Claude Code sessions"
 authors = ["James"]
 edition = "2021"
@@ -46,3 +46,4 @@ windows = { version = "0.58", features = [
 [dev-dependencies]
 tokio-test = "0.4"
 axum-test = "20"
+tempfile = "3"

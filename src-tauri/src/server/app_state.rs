@@ -1,13 +1,14 @@
 use tokio::sync::broadcast;
 
 use crate::models::WsEvent;
-use crate::state::{SessionRegistry, MessageStore, QuestionStore};
+use crate::state::{SessionRegistry, MessageStore, QuestionStore, UsageScanner};
 
 #[derive(Clone)]
 pub struct AppState {
     pub sessions: SessionRegistry,
     pub messages: MessageStore,
     pub questions: QuestionStore,
+    pub usage: UsageScanner,
     pub event_tx: broadcast::Sender<WsEvent>,
 }
 
@@ -18,6 +19,7 @@ impl AppState {
             sessions: SessionRegistry::new(),
             messages: MessageStore::new(),
             questions: QuestionStore::new(),
+            usage: UsageScanner::new(),
             event_tx,
         }
     }

@@ -12,13 +12,18 @@
 // pulse yellow every time Claude finishes any task, which is the bug this
 // hook used to have.
 
-import { readEvent, resolveSession, setStatus } from "./lib/hive.mjs";
+import { readEvent, resolveSession, setStatus, reportClaudeSession } from "./lib/hive.mjs";
 
 const event = await readEvent();
 if (!event) process.exit(0);
 
 const resolved = await resolveSession(event);
 if (!resolved) process.exit(0);
+
+// Re-assert the transcript link every turn. It costs one request and means a
+// session survives a hive restart mid-conversation without losing its usage
+// attribution — SessionStart only fires once, and by then it may be too late.
+await reportClaudeSession(resolved.url, resolved.id, event.session_id);
 
 // Only update if Claude left the status on running/thinking (meaning it forgot
 // to update). Don't override idle/error/waiting_for_input.

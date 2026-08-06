@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useHubStore } from "./stores/hubStore";
 import { useWebSocket } from "./hooks/useWebSocket";
+import { useUsage } from "./hooks/useUsage";
 import { useTheme } from "./hooks/useTheme";
 import { CollapsedBar } from "./components/CollapsedBar";
 import { ExpandedDashboard } from "./components/ExpandedDashboard";
@@ -191,6 +192,7 @@ function WindowBar({ barRef, captureExpandedHeight }: WindowBarProps) {
 
 function App() {
   useWebSocket();
+  useUsage();
   useTheme();
 
   const viewState = useHubStore((s) => s.viewState);

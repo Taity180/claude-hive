@@ -18,6 +18,7 @@ function session(overrides: Partial<Session> = {}): Session {
     connectedAt: "2026-01-01T00:00:00Z",
     lastActivity: "2026-01-01T00:00:00Z",
     windowHandle: 1234,
+    claudeSessionId: null,
     ...overrides,
   };
 }

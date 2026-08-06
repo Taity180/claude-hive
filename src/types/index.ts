@@ -16,6 +16,51 @@ export interface Session {
   connectedAt: string;
   lastActivity: string;
   windowHandle: number | null;
+  /** Claude Code's own session id, reported by a hook. Joins to token usage. */
+  claudeSessionId: string | null;
+}
+
+export interface TokenUsage {
+  input: number;
+  output: number;
+  cacheRead: number;
+  cacheCreation: number;
+}
+
+export interface SessionUsage {
+  claudeSessionId: string;
+  model: string | null;
+  /** Size of the prompt sent for the latest turn — how full the window is. */
+  contextTokens: number;
+  /** The model's context window, or null when we don't know it. */
+  contextLimit: number | null;
+  total: TokenUsage;
+  /** This session's share of today. */
+  today: TokenUsage;
+  /** Estimated cost of `total` at published rates — never a bill. */
+  estimatedCostUsd: number | null;
+  lastActivity: string | null;
+}
+
+export interface DailyUsage {
+  /** Local date, YYYY-MM-DD. */
+  date: string;
+  tokens: number;
+  /** False for days read from Claude Code's stats cache, which lags a day. */
+  live: boolean;
+}
+
+export interface UsageSnapshot {
+  sessions: SessionUsage[];
+  /** Today across every Claude Code session on this machine. */
+  today: TokenUsage;
+  /** Today across just the sessions connected to the hive. */
+  todayConnected: TokenUsage;
+  /** Last 7 days, oldest first. */
+  days: DailyUsage[];
+  /** Estimated cost of today's usage, or null if nothing could be priced. */
+  todayCostUsd: number | null;
+  scannedAt: string | null;
 }
 
 export type MessageType = "info" | "question" | "completion" | "error";

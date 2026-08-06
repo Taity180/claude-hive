@@ -28,6 +28,22 @@ pub fn start_session_pruner(state: AppState) {
     });
 }
 
+/// Start a background task that folds new transcript writes into the usage
+/// totals every 30 seconds.
+///
+/// The interval is cheap because scanning is incremental: unchanged files cost
+/// one `stat` each, and a changed one is read from the byte offset where the
+/// last scan stopped — a few KB per turn, not the whole file.
+pub fn start_usage_scanner(state: AppState) {
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(std::time::Duration::from_secs(30));
+        loop {
+            interval.tick().await;
+            state.usage.scan().await;
+        }
+    });
+}
+
 pub fn create_router(state: AppState, static_dir: Option<std::path::PathBuf>) -> Router {
     use tower_http::services::ServeDir;
 
@@ -46,6 +62,8 @@ pub fn create_router(state: AppState, static_dir: Option<std::path::PathBuf>) ->
         .route("/api/sessions/{session_id}/messages/user", post(send_user_message))
         .route("/api/sessions/{session_id}/broadcast", post(broadcast_message))
         .route("/api/sessions/{session_id}/notify", post(notify))
+        .route("/api/usage", get(get_usage))
+        .route("/api/sessions/{session_id}/claude-session", put(set_claude_session))
         .route("/api/questions", get(list_pending_questions))
         .route("/api/sessions/{session_id}/ask", post(ask_question))
         .route("/api/sessions/{session_id}/ask", get(get_question))

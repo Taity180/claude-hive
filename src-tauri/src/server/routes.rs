@@ -228,6 +228,42 @@ pub async fn notify(
     StatusCode::OK
 }
 
+// ── Token usage ────────────────────────────────────────────────────────
+
+/// Token usage read out of Claude Code's transcripts.
+///
+/// `today` covers every session on the machine — including ones that never
+/// connected to the hive — because "how much have I used today" is an
+/// account-level question, not a per-dashboard one.
+pub async fn get_usage(State(state): State<AppState>) -> Json<UsageSnapshot> {
+    let connected: Vec<String> = state
+        .sessions
+        .list()
+        .await
+        .into_iter()
+        .filter_map(|s| s.claude_session_id)
+        .collect();
+    Json(state.usage.snapshot(&connected).await)
+}
+
+/// Link a hive session to the Claude Code session whose transcript holds its
+/// usage. Only a hook knows this pairing, so a hook reports it.
+pub async fn set_claude_session(
+    State(state): State<AppState>,
+    Path(session_id): Path<String>,
+    Json(request): Json<SetClaudeSessionRequest>,
+) -> StatusCode {
+    if state
+        .sessions
+        .set_claude_session_id(&session_id, request.claude_session_id)
+        .await
+    {
+        StatusCode::OK
+    } else {
+        StatusCode::NOT_FOUND
+    }
+}
+
 // ── Questions ──────────────────────────────────────────────────────────
 //
 // A question is a message the session is blocked on. Asking one flips the

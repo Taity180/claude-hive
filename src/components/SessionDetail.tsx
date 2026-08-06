@@ -3,6 +3,7 @@ import { useHubStore } from "../stores/hubStore";
 import { ChatMessage } from "./ChatMessage";
 import { ChatInput } from "./ChatInput";
 import { QuestionPrompt } from "./QuestionPrompt";
+import { SessionUsageBar } from "./UsageMeter";
 import { api } from "../api";
 import type { Message } from "../types";
 
@@ -34,6 +35,7 @@ export function SessionDetail() {
   const question = useHubStore((s) =>
     activeSessionId ? s.questions[activeSessionId] : undefined
   );
+  const usage = useHubStore((s) => s.usage);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const session = sessions.find((s) => s.id === activeSessionId);
@@ -94,6 +96,12 @@ export function SessionDetail() {
   }
 
   const connectedDuration = formatDuration(session.connectedAt);
+  // Usage is keyed by Claude Code's session id, which a hook reports. Until
+  // that arrives (or if the transcript format changed) there is simply nothing
+  // to show — better than a zeroed-out meter.
+  const sessionUsage = session.claudeSessionId
+    ? usage?.sessions.find((u) => u.claudeSessionId === session.claudeSessionId)
+    : undefined;
 
   return (
     <div
@@ -162,6 +170,12 @@ export function SessionDetail() {
         <span>Connected {connectedDuration}</span>
         {session.gitBranch && <span>Branch: {session.gitBranch}</span>}
       </div>
+
+      {sessionUsage && (
+        <div className="px-4 py-2 border-b" style={{ borderColor: "var(--hub-border)" }}>
+          <SessionUsageBar usage={sessionUsage} />
+        </div>
+      )}
 
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-3">
         {messages.length > 0 && (

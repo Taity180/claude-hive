@@ -265,3 +265,66 @@ async fn unregistering_a_session_drops_its_question() {
     let pending: Vec<Question> = server.get("/api/questions").await.json();
     assert!(pending.is_empty());
 }
+
+// ── Token usage ────────────────────────────────────────────────────────
+
+use claude_hive_lib::models::UsageSnapshot;
+
+#[tokio::test]
+async fn usage_starts_empty_and_does_not_error() {
+    let server = test_server();
+    let response = server.get("/api/usage").await;
+    response.assert_status_ok();
+
+    let snapshot: UsageSnapshot = response.json();
+    assert!(snapshot.sessions.is_empty());
+    assert_eq!(snapshot.today.total(), 0);
+}
+
+#[tokio::test]
+async fn a_hook_can_link_a_session_to_its_claude_session_id() {
+    let server = test_server();
+    let session = register(&server).await;
+    assert_eq!(session.claude_session_id, None);
+
+    server
+        .put(&format!("/api/sessions/{}/claude-session", session.id))
+        .json(&json!({ "claudeSessionId": "claude-abc" }))
+        .await
+        .assert_status_ok();
+
+    let sessions: Vec<Session> = server.get("/api/sessions").await.json();
+    assert_eq!(sessions[0].claude_session_id, Some("claude-abc".to_string()));
+}
+
+#[tokio::test]
+async fn linking_an_unknown_session_is_a_not_found() {
+    let server = test_server();
+    let response = server
+        .put("/api/sessions/nope/claude-session")
+        .json(&json!({ "claudeSessionId": "claude-abc" }))
+        .await;
+    response.assert_status(StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn re_registering_keeps_the_transcript_link() {
+    // A hive restart re-registers the session under the same id; losing the
+    // link here would silently orphan its usage until the next Stop hook.
+    let server = test_server();
+    let session = register(&server).await;
+    server
+        .put(&format!("/api/sessions/{}/claude-session", session.id))
+        .json(&json!({ "claudeSessionId": "claude-abc" }))
+        .await
+        .assert_status_ok();
+
+    server
+        .post("/api/sessions")
+        .json(&json!({ "id": session.id, "workingDirectory": "/home/user/my-project" }))
+        .await
+        .assert_status(StatusCode::CREATED);
+
+    let sessions: Vec<Session> = server.get("/api/sessions").await.json();
+    assert_eq!(sessions[0].claude_session_id, Some("claude-abc".to_string()));
+}

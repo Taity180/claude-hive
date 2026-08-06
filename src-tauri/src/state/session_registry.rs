@@ -28,6 +28,12 @@ impl SessionRegistry {
             .unwrap_or("unknown")
             .to_string();
         let now = Utc::now();
+        let existing_claude_session_id = self
+            .sessions
+            .read()
+            .await
+            .get(&id)
+            .and_then(|s| s.claude_session_id.clone());
 
         let session = Session {
             id: id.clone(),
@@ -40,10 +46,26 @@ impl SessionRegistry {
             connected_at: now,
             last_activity: now,
             window_handle: request.window_handle,
+            // Set later by a hook, which is the only thing that knows it.
+            // Preserved across a re-register so a hive restart doesn't lose
+            // the link to the session's transcript.
+            claude_session_id: existing_claude_session_id,
         };
 
         self.sessions.write().await.insert(id, session.clone());
         session
+    }
+
+    /// Record which Claude Code session this hive session belongs to.
+    pub async fn set_claude_session_id(&self, session_id: &str, claude_session_id: String) -> bool {
+        let mut sessions = self.sessions.write().await;
+        match sessions.get_mut(session_id) {
+            Some(session) => {
+                session.claude_session_id = Some(claude_session_id);
+                true
+            }
+            None => false,
+        }
     }
 
     pub async fn unregister(&self, session_id: &str) -> Option<Session> {

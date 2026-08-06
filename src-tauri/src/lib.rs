@@ -204,7 +204,9 @@ pub fn run() {
                 let rt = tokio::runtime::Runtime::new().expect("failed to create tokio runtime");
                 rt.block_on(async {
                     // Start background task to prune stale sessions
-                    server::start_session_pruner(state);
+                    server::start_session_pruner(state.clone());
+                    // Start background task to read token usage from transcripts
+                    server::start_usage_scanner(state);
 
                     let listener = tokio::net::TcpListener::bind(addr)
                         .await

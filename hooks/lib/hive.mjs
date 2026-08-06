@@ -261,6 +261,26 @@ export async function setStatus(url, sessionId, status, detail) {
   } catch {}
 }
 
+/**
+ * Tell the hive which Claude Code session a hive session belongs to.
+ *
+ * Claude Code names each transcript after its session id, and that transcript
+ * is where token usage lives — so this pairing is what lets the dashboard
+ * attribute usage to the right pill. Only a hook knows both halves.
+ * Never throws.
+ */
+export async function reportClaudeSession(url, sessionId, claudeSessionId) {
+  if (!claudeSessionId) return;
+  try {
+    await fetch(`${url}/api/sessions/${sessionId}/claude-session`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ claudeSessionId }),
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    });
+  } catch {}
+}
+
 /** Unregister a session from the hive. Never throws. */
 export async function deleteSession(url, sessionId) {
   try {

@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { Session, Message, Question, ViewState, WsEvent } from "../types";
+import type { Session, Message, Question, UsageSnapshot, ViewState, WsEvent } from "../types";
 
 // Minimum sensible height for the expanded dashboard. Guards against a bad
 // value being persisted (e.g. someone resized the window to almost nothing
@@ -15,6 +15,8 @@ interface HubState {
   messages: Record<string, Message[]>;
   /** The unanswered question per session, if it has one. */
   questions: Record<string, Question>;
+  /** Token usage read from Claude Code transcripts, or null before first load. */
+  usage: UsageSnapshot | null;
   viewState: ViewState;
   activeSessionId: string | null;
   unreadSessions: Set<string>;
@@ -28,6 +30,7 @@ interface HubState {
   setSessions: (sessions: Session[]) => void;
   setMessages: (sessionId: string, messages: Message[]) => void;
   setPendingQuestions: (questions: Question[]) => void;
+  setUsage: (usage: UsageSnapshot) => void;
   renameSession: (sessionId: string, name: string | null) => void;
   clearMessages: (sessionId: string) => void;
 }
@@ -45,6 +48,7 @@ export const useHubStore = create<HubState>((set) => ({
   sessions: [],
   messages: {},
   questions: {},
+  usage: null,
   viewState: "collapsed",
   activeSessionId: null,
   unreadSessions: new Set(),
@@ -76,6 +80,8 @@ export const useHubStore = create<HubState>((set) => ({
     set({
       questions: Object.fromEntries(questions.map((q) => [q.sessionId, q])),
     }),
+
+  setUsage: (usage) => set({ usage }),
 
   addUserMessage: (sessionId, message) =>
     set((state) => ({

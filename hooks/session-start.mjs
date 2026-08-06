@@ -3,7 +3,7 @@
 // Claude Hive session-start hook
 // Checks if the hive is running and injects behavioral instructions
 
-import { readEvent, hiveUrl, resolveSession } from "./lib/hive.mjs";
+import { readEvent, hiveUrl, resolveSession, reportClaudeSession } from "./lib/hive.mjs";
 
 const event = (await readEvent()) || {};
 const url = hiveUrl();
@@ -25,6 +25,12 @@ if (connected) {
   // from the working directory, which is what lets two Claude Code sessions
   // share a repo without stomping on each other's dashboard pill.
   const resolved = await resolveSession(event);
+
+  // Hand over Claude Code's session id so the hive can find this session's
+  // transcript and read its token usage.
+  if (resolved) {
+    await reportClaudeSession(url, resolved.id, event.session_id);
+  }
 
   // The hive's session list includes us once the MCP server has registered.
   let otherCount = 0;
