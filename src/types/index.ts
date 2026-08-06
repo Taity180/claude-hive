@@ -50,6 +50,34 @@ export interface DailyUsage {
   live: boolean;
 }
 
+export interface UsageWindow {
+  /** 0-100. */
+  utilization: number | null;
+  resetsAt: string | null;
+}
+
+export interface PlanUsage {
+  fiveHour: UsageWindow | null;
+  sevenDay: UsageWindow | null;
+  sevenDayOpus: UsageWindow | null;
+  sevenDaySonnet: UsageWindow | null;
+  extraUsage: {
+    isEnabled: boolean;
+    monthlyLimit: number | null;
+    usedCredits: number | null;
+    utilization: number | null;
+    currency: string | null;
+  } | null;
+}
+
+export type PlanUsageStatus = "ok" | "notLoggedIn" | "expired" | "unavailable" | "pending";
+
+export interface PlanUsageSnapshot {
+  status: PlanUsageStatus;
+  usage: PlanUsage | null;
+  fetchedAt: string | null;
+}
+
 export interface UsageSnapshot {
   sessions: SessionUsage[];
   /** Today across every Claude Code session on this machine. */

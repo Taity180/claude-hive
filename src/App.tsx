@@ -7,6 +7,7 @@ import { useTheme } from "./hooks/useTheme";
 import { CollapsedBar } from "./components/CollapsedBar";
 import { ExpandedDashboard } from "./components/ExpandedDashboard";
 import { GlobalUsage } from "./components/UsageMeter";
+import { PlanUsageChip } from "./components/PlanUsage";
 import { SessionDetail } from "./components/SessionDetail";
 import { Settings } from "./components/Settings";
 
@@ -118,6 +119,7 @@ function WindowBar({ barRef, captureExpandedHeight }: WindowBarProps) {
 
       {/* Token usage lives here rather than in the expanded toolbar so it stays
           visible while collapsed — the state the hub spends most of its time in. */}
+      <PlanUsageChip />
       <GlobalUsage />
 
       {/* Navigation */}

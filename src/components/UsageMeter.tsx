@@ -2,6 +2,7 @@ import { useState } from "react";
 import { createPortal } from "react-dom";
 import { useHubStore } from "../stores/hubStore";
 import type { SessionUsage, TokenUsage } from "../types";
+import { PlanUsagePanel } from "./PlanUsage";
 
 /** "$1.23", or null when the model had no known rates. */
 export function formatCost(usd: number | null | undefined): string | null {
@@ -181,7 +182,12 @@ export function GlobalUsage() {
               overflowY: "auto",
             }}
           >
-            <p className="text-[10px] font-medium mb-2" style={{ color: "var(--hub-text)" }}>
+            <p className="text-[10px] font-medium mb-1" style={{ color: "var(--hub-text)" }}>
+              Plan limits
+            </p>
+            <PlanUsagePanel />
+
+            <p className="text-[10px] font-medium mt-3 mb-2" style={{ color: "var(--hub-text)" }}>
               Today — every Claude Code session
             </p>
 

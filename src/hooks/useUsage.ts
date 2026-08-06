@@ -16,16 +16,19 @@ const POLL_MS = 30_000;
  */
 export function useUsage() {
   const setUsage = useHubStore((s) => s.setUsage);
+  const setPlanUsage = useHubStore((s) => s.setPlanUsage);
 
   useEffect(() => {
     let cancelled = false;
 
     const load = async () => {
       try {
-        const resp = await fetch(`${api.baseUrl}/api/usage`);
-        if (!resp.ok) return;
-        const snapshot = await resp.json();
-        if (!cancelled) setUsage(snapshot);
+        const [tokens, plan] = await Promise.all([
+          fetch(`${api.baseUrl}/api/usage`),
+          fetch(`${api.baseUrl}/api/usage/plan`),
+        ]);
+        if (tokens.ok && !cancelled) setUsage(await tokens.json());
+        if (plan.ok && !cancelled) setPlanUsage(await plan.json());
       } catch {
         // Hive unreachable — keep the last numbers rather than blanking them.
       }
@@ -37,5 +40,5 @@ export function useUsage() {
       cancelled = true;
       clearInterval(timer);
     };
-  }, [setUsage]);
+  }, [setUsage, setPlanUsage]);
 }

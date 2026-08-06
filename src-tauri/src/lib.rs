@@ -206,7 +206,9 @@ pub fn run() {
                     // Start background task to prune stale sessions
                     server::start_session_pruner(state.clone());
                     // Start background task to read token usage from transcripts
-                    server::start_usage_scanner(state);
+                    server::start_usage_scanner(state.clone());
+                    // Start background task to poll plan rate-limit windows
+                    server::start_plan_usage_poller(state);
 
                     let listener = tokio::net::TcpListener::bind(addr)
                         .await

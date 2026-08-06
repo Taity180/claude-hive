@@ -44,6 +44,22 @@ pub fn start_usage_scanner(state: AppState) {
     });
 }
 
+/// Poll plan usage every 60 seconds.
+///
+/// Slower than the transcript scan because it is a network call against
+/// someone else's service, and the windows it reports move over hours rather
+/// than seconds. The token is re-read each time, so a rotated token or a
+/// different account is picked up without a restart.
+pub fn start_plan_usage_poller(state: AppState) {
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(std::time::Duration::from_secs(60));
+        loop {
+            interval.tick().await;
+            state.plan_usage.refresh().await;
+        }
+    });
+}
+
 pub fn create_router(state: AppState, static_dir: Option<std::path::PathBuf>) -> Router {
     use tower_http::services::ServeDir;
 
@@ -63,6 +79,7 @@ pub fn create_router(state: AppState, static_dir: Option<std::path::PathBuf>) ->
         .route("/api/sessions/{session_id}/broadcast", post(broadcast_message))
         .route("/api/sessions/{session_id}/notify", post(notify))
         .route("/api/usage", get(get_usage))
+        .route("/api/usage/plan", get(get_plan_usage))
         .route("/api/sessions/{session_id}/claude-session", put(set_claude_session))
         .route("/api/questions", get(list_pending_questions))
         .route("/api/sessions/{session_id}/ask", post(ask_question))

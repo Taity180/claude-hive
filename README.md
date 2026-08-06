@@ -131,7 +131,15 @@ Scanning is incremental: only transcripts touched in the last 36 hours are opene
 
 Totals count **input + output**. Cache reads run ~300x that volume on a long session, so including them would say more about how much history is re-sent each turn than about how much work happened — the cache-inclusive figure is still there, one row down and in tooltips.
 
-**What it can't show:** your plan's usage percentage and reset time. Claude Code fetches those from the API at request time and never writes them to disk — run `/usage` in a session for those. Cost is an estimate at published rates, not a bill; subscription plans aren't charged per token at all. Models with no known context window or rates show their token counts without a percentage or price rather than a guessed one.
+### Plan Limits
+
+The title bar shows how much of your 5-hour window is spent and when it resets (`5h 42% · 2h 20m`); the breakdown adds the 7-day windows, per-model weekly limits, and extra credits.
+
+This is the only thing the hive can't read off disk — rate-limit windows are a subscription concept and live behind `GET /api/oauth/usage`. Authentication reuses the OAuth token Claude Code already stores in `~/.claude/.credentials.json`; there is no API key to create, and the token is re-read on every poll so a rotated token or a different account is picked up without a restart.
+
+The endpoint is **undocumented**, so every field is optional and any failure — no login, expired token, network, or a changed response shape — shows nothing or the last known value clearly marked, never a guessed percentage. An API-key login has no plan windows and the row simply doesn't appear.
+
+**What it can't show:** cost is an estimate at published rates, not a bill; subscription plans aren't charged per token at all. Models with no known context window or rates show their token counts without a percentage or price rather than a guessed one.
 
 ### Chat Messaging
 
