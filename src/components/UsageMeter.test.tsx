@@ -258,7 +258,7 @@ describe("GlobalUsage while collapsed", () => {
     expect(screen.getByText("600.0k today")).toBeInTheDocument();
   });
 
-  it("does not open a popover that the collapsed window would clip", () => {
+  it("expands the hub first, since a popover would otherwise be clipped by the window", () => {
     useHubStore.setState({
       viewState: "collapsed",
       usage: snapshot({ today: tokens({ input: 500_000, output: 100_000 }) }),
@@ -267,8 +267,9 @@ describe("GlobalUsage while collapsed", () => {
     render(<GlobalUsage />);
     fireEvent.click(screen.getByRole("button"));
 
-    expect(screen.queryByText("Cache read")).not.toBeInTheDocument();
-    // The cache figure is still reachable without expanding.
-    expect(screen.getByRole("button").getAttribute("title")).toContain("including cache");
+    // Growing the window is the only way to make room — while collapsed a
+    // ResizeObserver holds it tight against the pill content.
+    expect(useHubStore.getState().viewState).toBe("expanded");
+    expect(screen.getByText("Cache read")).toBeInTheDocument();
   });
 });

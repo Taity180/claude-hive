@@ -112,12 +112,19 @@ export function GlobalUsage() {
   const usage = useHubStore((s) => s.usage);
   const sessions = useHubStore((s) => s.sessions);
   const viewState = useHubStore((s) => s.viewState);
+  const setViewState = useHubStore((s) => s.setViewState);
   const [open, setOpen] = useState(false);
 
-  // The collapsed window is barely taller than the title bar, so a popover
-  // would be clipped by the window bounds. The total still shows — it's the
-  // breakdown that needs room.
-  const canExpand = viewState !== "collapsed";
+  // Opening the breakdown from a collapsed hub has to grow the window first.
+  // A taller popover can't simply overflow: while collapsed a ResizeObserver
+  // holds the OS window tight against the pill content, so anything past the
+  // window bounds is clipped by the window, not by CSS — no z-index fixes it.
+  // Expanding hands back the user's remembered height, and the popover then
+  // overlays that.
+  const toggle = () => {
+    if (!open && viewState === "collapsed") setViewState("expanded");
+    setOpen(!open);
+  };
 
   if (!usage || totalTokens(usage.today) === 0) return null;
 
@@ -142,24 +149,18 @@ export function GlobalUsage() {
   return (
     <div className="relative">
       <button
-        onClick={() => canExpand && setOpen(!open)}
-        disabled={!canExpand}
-        className="text-[10px] opacity-40 hover:opacity-70 transition-opacity px-1.5 py-0.5 rounded disabled:hover:opacity-40"
+        onClick={toggle}
+        className="text-[10px] opacity-40 hover:opacity-70 transition-opacity px-1.5 py-0.5 rounded cursor-pointer"
         style={{
           color: "var(--hub-text)",
           background: open ? "var(--hub-surface)" : "transparent",
-          cursor: canExpand ? "pointer" : "default",
         }}
-        title={
-          canExpand
-            ? "Tokens today (input + output) — click for the breakdown"
-            : `Tokens today (input + output). ${formatTokens(withCache)} including cache. Expand the hub for the full breakdown.`
-        }
+        title={`Tokens today (input + output). ${formatTokens(withCache)} including cache. Click for the breakdown.`}
       >
         {formatTokens(machine)} today{cost ? ` · ~${cost}` : ""}
       </button>
 
-      {open && canExpand &&
+      {open &&
         createPortal(
           <div
             style={{
@@ -172,7 +173,12 @@ export function GlobalUsage() {
               borderRadius: 8,
               padding: 12,
               boxShadow: "0 10px 25px rgba(0,0,0,0.5)",
+              // Above every other layer, including the session detail view.
               zIndex: 99999,
+              // Never taller than the window itself — a short expanded height
+              // scrolls the panel rather than losing its bottom rows.
+              maxHeight: "calc(100vh - 84px)",
+              overflowY: "auto",
             }}
           >
             <p className="text-[10px] font-medium mb-2" style={{ color: "var(--hub-text)" }}>
