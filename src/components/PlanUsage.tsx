@@ -38,6 +38,8 @@ export function resetClock(iso: string | null): string | null {
  */
 export function PlanUsageChip() {
   const plan = useHubStore((s) => s.planUsage);
+  const open = useHubStore((s) => s.usagePanelOpen);
+  const setOpen = useHubStore((s) => s.setUsagePanelOpen);
 
   const five = plan?.usage?.fiveHour;
   const pct = five?.utilization;
@@ -51,14 +53,21 @@ export function PlanUsageChip() {
   const stale = plan?.status !== "ok";
 
   return (
-    <span
-      className="flex items-center gap-1 text-[10px]"
-      style={{ color: "var(--hub-text)", opacity: stale ? 0.35 : 0.7 }}
+    <button
+      onClick={() => setOpen(!open)}
+      className={`flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded transition-opacity cursor-pointer ${
+        stale ? "opacity-25 hover:opacity-50" : "opacity-40 hover:opacity-70"
+      }`}
+      style={{
+        color: "var(--hub-text)",
+        background: open ? "var(--hub-surface)" : "transparent",
+      }}
       title={
         [
           `5-hour window: ${rounded}% used`,
           clock ? `Resets ${clock}${until ? ` (in ${until})` : ""}` : null,
           stale ? "Last known value — refresh failed" : null,
+          "Click for the full breakdown",
         ]
           .filter(Boolean)
           .join("\n")
@@ -70,7 +79,7 @@ export function PlanUsageChip() {
       />
       5h {rounded}%
       {until && <span style={{ opacity: 0.6 }}>· {until}</span>}
-    </span>
+    </button>
   );
 }
 

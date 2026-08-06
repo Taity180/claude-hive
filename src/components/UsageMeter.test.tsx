@@ -85,7 +85,7 @@ describe("SessionUsageBar", () => {
 
 describe("GlobalUsage", () => {
   beforeEach(() => {
-    useHubStore.setState({ usage: null, viewState: "expanded" });
+    useHubStore.setState({ usage: null, viewState: "expanded", usagePanelOpen: false, usagePanelHeight: 0 });
   });
 
   it("renders nothing before the first scan lands", () => {
@@ -125,6 +125,7 @@ describe("GlobalUsage", () => {
       useHubStore.setState({
         sessions: [],
         viewState: "expanded",
+        usagePanelOpen: false,
         usage: snapshot({
           today: tokens({ input: 10_000, output: 20_000, cacheRead: 500_000, cacheCreation: 70_000 }),
           todayConnected: tokens({ input: 200_000 }),
@@ -171,6 +172,7 @@ describe("GlobalUsage", () => {
     it("names the sessions the hive recognises and aggregates the rest", () => {
       useHubStore.setState({
         viewState: "expanded",
+        usagePanelOpen: false,
         sessions: [
           {
             id: "s1",
@@ -258,18 +260,33 @@ describe("GlobalUsage while collapsed", () => {
     expect(screen.getByText("600.0k today")).toBeInTheDocument();
   });
 
-  it("expands the hub first, since a popover would otherwise be clipped by the window", () => {
+  it("opens in place without forcing the hub to expand", () => {
     useHubStore.setState({
       viewState: "collapsed",
+      usagePanelOpen: false,
       usage: snapshot({ today: tokens({ input: 500_000, output: 100_000 }) }),
     });
 
     render(<GlobalUsage />);
     fireEvent.click(screen.getByRole("button"));
 
-    // Growing the window is the only way to make room — while collapsed a
-    // ResizeObserver holds it tight against the pill content.
-    expect(useHubStore.getState().viewState).toBe("expanded");
+    // The window grows to fit the overlay instead (see App's collapsed sizer).
+    expect(useHubStore.getState().viewState).toBe("collapsed");
     expect(screen.getByText("Cache read")).toBeInTheDocument();
+  });
+
+  it("closes itself when the view changes", () => {
+    useHubStore.setState({
+      viewState: "collapsed",
+      usagePanelOpen: false,
+      usage: snapshot({ today: tokens({ input: 500_000, output: 100_000 }) }),
+    });
+    render(<GlobalUsage />);
+    fireEvent.click(screen.getByRole("button"));
+    expect(useHubStore.getState().usagePanelOpen).toBe(true);
+
+    // Expanding or collapsing should not leave an overlay from the old view.
+    useHubStore.getState().setViewState("expanded");
+    expect(useHubStore.getState().usagePanelOpen).toBe(false);
   });
 });

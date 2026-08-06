@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback } from "react";
 import { createPortal } from "react-dom";
 import { useHubStore } from "../stores/hubStore";
 import type { SessionUsage, TokenUsage } from "../types";
@@ -112,20 +112,27 @@ export function SessionUsageBar({ usage }: { usage: SessionUsage }) {
 export function GlobalUsage() {
   const usage = useHubStore((s) => s.usage);
   const sessions = useHubStore((s) => s.sessions);
-  const viewState = useHubStore((s) => s.viewState);
-  const setViewState = useHubStore((s) => s.setViewState);
-  const [open, setOpen] = useState(false);
+  const open = useHubStore((s) => s.usagePanelOpen);
+  const setOpen = useHubStore((s) => s.setUsagePanelOpen);
+  const setPanelHeight = useHubStore((s) => s.setUsagePanelHeight);
 
-  // Opening the breakdown from a collapsed hub has to grow the window first.
-  // A taller popover can't simply overflow: while collapsed a ResizeObserver
-  // holds the OS window tight against the pill content, so anything past the
-  // window bounds is clipped by the window, not by CSS — no z-index fixes it.
-  // Expanding hands back the user's remembered height, and the popover then
-  // overlays that.
-  const toggle = () => {
-    if (!open && viewState === "collapsed") setViewState("expanded");
-    setOpen(!open);
-  };
+  // Report the panel's height so a collapsed window can grow to fit it. While
+  // collapsed the window hugs its content, so an overlay taller than the pills
+  // is clipped by the OS window rather than by CSS — the sizer has to know.
+  const measurePanel = useCallback(
+    (node: HTMLDivElement | null) => {
+      if (!node) {
+        setPanelHeight(0);
+        return;
+      }
+      const report = () => setPanelHeight(node.offsetHeight);
+      report();
+      const observer = new ResizeObserver(report);
+      observer.observe(node);
+      return () => observer.disconnect();
+    },
+    [setPanelHeight],
+  );
 
   if (!usage || totalTokens(usage.today) === 0) return null;
 
@@ -150,7 +157,7 @@ export function GlobalUsage() {
   return (
     <div className="relative">
       <button
-        onClick={toggle}
+        onClick={() => setOpen(!open)}
         className="text-[10px] opacity-40 hover:opacity-70 transition-opacity px-1.5 py-0.5 rounded cursor-pointer"
         style={{
           color: "var(--hub-text)",
@@ -164,6 +171,7 @@ export function GlobalUsage() {
       {open &&
         createPortal(
           <div
+            ref={measurePanel}
             style={{
               position: "fixed",
               right: 12,

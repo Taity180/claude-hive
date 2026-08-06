@@ -19,6 +19,14 @@ interface HubState {
   usage: UsageSnapshot | null;
   /** Plan rate-limit windows, or null before the first poll. */
   planUsage: PlanUsageSnapshot | null;
+  /** Whether the usage breakdown panel is showing. */
+  usagePanelOpen: boolean;
+  /**
+   * Measured height of that panel, so a collapsed window can grow to fit it.
+   * While collapsed the window is sized to hug its content, so an overlay has
+   * to be accounted for or the OS window clips it.
+   */
+  usagePanelHeight: number;
   viewState: ViewState;
   activeSessionId: string | null;
   unreadSessions: Set<string>;
@@ -34,6 +42,8 @@ interface HubState {
   setPendingQuestions: (questions: Question[]) => void;
   setUsage: (usage: UsageSnapshot) => void;
   setPlanUsage: (usage: PlanUsageSnapshot) => void;
+  setUsagePanelOpen: (open: boolean) => void;
+  setUsagePanelHeight: (height: number) => void;
   renameSession: (sessionId: string, name: string | null) => void;
   clearMessages: (sessionId: string) => void;
 }
@@ -53,12 +63,14 @@ export const useHubStore = create<HubState>((set) => ({
   questions: {},
   usage: null,
   planUsage: null,
+  usagePanelOpen: false,
+  usagePanelHeight: 0,
   viewState: "collapsed",
   activeSessionId: null,
   unreadSessions: new Set(),
   expandedHeight: DEFAULT_EXPANDED_HEIGHT,
 
-  setViewState: (viewState) => set({ viewState }),
+  setViewState: (viewState) => set({ viewState, usagePanelOpen: false }),
 
   setExpandedHeight: (height) =>
     set({ expandedHeight: Math.max(MIN_EXPANDED_HEIGHT, height) }),
@@ -66,6 +78,7 @@ export const useHubStore = create<HubState>((set) => ({
   setActiveSession: (activeSessionId) =>
     set((state) => ({
       activeSessionId,
+      usagePanelOpen: false,
       viewState: activeSessionId ? "session-detail" : "expanded",
       // Clear unread when user clicks into a session
       unreadSessions: activeSessionId
@@ -88,6 +101,10 @@ export const useHubStore = create<HubState>((set) => ({
   setUsage: (usage) => set({ usage }),
 
   setPlanUsage: (planUsage) => set({ planUsage }),
+
+  setUsagePanelOpen: (usagePanelOpen) => set({ usagePanelOpen }),
+
+  setUsagePanelHeight: (usagePanelHeight) => set({ usagePanelHeight }),
 
   addUserMessage: (sessionId, message) =>
     set((state) => ({

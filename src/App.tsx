@@ -15,6 +15,11 @@ import { Settings } from "./components/Settings";
 // Kept in one place so the sizing math stays in sync with the JSX below.
 const SCROLL_WRAPPER_PADDING_Y = 8;
 
+// Gap between the title bar and the usage panel, plus a little breathing room
+// below it, so a collapsed window that grows to fit the panel isn't flush
+// against its edges.
+const USAGE_PANEL_MARGIN = 48;
+
 async function invokeCommand<T = void>(
   cmd: string,
   args?: Record<string, unknown>
@@ -206,6 +211,7 @@ function App() {
   const sessions = useHubStore((s) => s.sessions);
   const expandedHeight = useHubStore((s) => s.expandedHeight);
   const setExpandedHeight = useHubStore((s) => s.setExpandedHeight);
+  const usagePanelHeight = useHubStore((s) => s.usagePanelHeight);
 
   const windowBarRef = useRef<HTMLDivElement>(null);
   const collapsedContentRef = useRef<HTMLDivElement>(null);
@@ -240,8 +246,13 @@ function App() {
     let cancelled = false;
     const applyHeight = () => {
       if (cancelled) return;
+      // The usage breakdown overlays the window rather than flowing inside it,
+      // so it contributes nothing to `content.offsetHeight` — but the OS window
+      // would clip it all the same. Add its measured height so the panel opens
+      // in place instead of forcing the hub to expand.
+      const overlay = usagePanelHeight > 0 ? usagePanelHeight + USAGE_PANEL_MARGIN : 0;
       const height = Math.ceil(
-        bar.offsetHeight + content.offsetHeight + SCROLL_WRAPPER_PADDING_Y
+        bar.offsetHeight + content.offsetHeight + SCROLL_WRAPPER_PADDING_Y + overlay
       );
       void invokeCommand("resize_preserving_width", { height });
     };
@@ -253,7 +264,7 @@ function App() {
       cancelled = true;
       observer.disconnect();
     };
-  }, [viewState, sessions.length]);
+  }, [viewState, sessions.length, usagePanelHeight]);
 
   // Whenever we're in a "big" view (expanded, session-detail, settings),
   // restore the user's last remembered expanded height. This means clicking
