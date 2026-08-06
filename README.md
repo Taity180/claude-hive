@@ -124,10 +124,12 @@ Single-select answers send on click. Multi-select accumulates and sends on **Sen
 
 Reads Claude Code's own transcripts (`~/.claude/projects/**/*.jsonl`) to show where your tokens are going — no credentials, no cooperation from the model needed.
 
-- **Per session** — how full the context window is (`669.7k context · 67% of 1.0M`), lifetime tokens, and an estimated cost
+- **Per session** — how full the context window is (`669.7k context · 67% of 1.0M`), tokens used, and an estimated cost
 - **Global** — today's tokens across *every* Claude Code session on the machine, split by input / output / cache read / cache write, plus a 7-day trend and today's top sessions
 
 Scanning is incremental: only transcripts touched in the last 36 hours are opened, and each is read from the byte offset where the previous scan stopped, so a 30-second refresh costs almost nothing even across thousands of files.
+
+Totals count **input + output**. Cache reads run ~300x that volume on a long session, so including them would say more about how much history is re-sent each turn than about how much work happened — the cache-inclusive figure is still there, one row down and in tooltips.
 
 **What it can't show:** your plan's usage percentage and reset time. Claude Code fetches those from the API at request time and never writes them to disk — run `/usage` in a session for those. Cost is an estimate at published rates, not a bill; subscription plans aren't charged per token at all. Models with no known context window or rates show their token counts without a percentage or price rather than a guessed one.
 

@@ -1,7 +1,7 @@
 import "@testing-library/jest-dom/vitest";
 import { describe, it, expect, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
-import { SessionUsageBar, GlobalUsage, formatTokens, formatCost } from "./UsageMeter";
+import { SessionUsageBar, GlobalUsage, formatTokens, formatCost, workTokens, totalTokens } from "./UsageMeter";
 import { useHubStore } from "../stores/hubStore";
 import type { SessionUsage, TokenUsage, UsageSnapshot } from "../types";
 
@@ -52,9 +52,17 @@ describe("SessionUsageBar", () => {
     expect(screen.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "25");
   });
 
-  it("shows the cumulative total alongside the live context size", () => {
+  it("reports the total as input + output, leaving cache out", () => {
+    // 1k in + 2k out = 3.0k. The 47k cache read is not "work done".
     render(<SessionUsageBar usage={sessionUsage()} />);
-    expect(screen.getByText("50.0k total")).toBeInTheDocument();
+    expect(screen.getByText("3.0k total")).toBeInTheDocument();
+    expect(screen.queryByText("50.0k total")).not.toBeInTheDocument();
+  });
+
+  it("keeps the cache-inclusive figure available in the tooltip", () => {
+    render(<SessionUsageBar usage={sessionUsage()} />);
+    const title = screen.getByText("3.0k total").getAttribute("title") ?? "";
+    expect(title).toContain("50.0k including cache");
   });
 
   it("refuses to draw a bar for a model whose window it does not know", () => {
@@ -91,7 +99,7 @@ describe("GlobalUsage", () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  it("reports today's machine-wide total", () => {
+  it("reports today's machine-wide total as input + output", () => {
     useHubStore.setState({
       usage: snapshot({
         today: tokens({ input: 500_000, output: 100_000 }),
@@ -136,6 +144,10 @@ describe("GlobalUsage", () => {
       expect(screen.getByText("500.0k")).toBeInTheDocument();
       expect(screen.getByText("Cache write")).toBeInTheDocument();
       expect(screen.getByText("70.0k")).toBeInTheDocument();
+      // Headline total excludes cache; the cache-inclusive figure is its own row.
+      expect(screen.getByText("Incl. cache")).toBeInTheDocument();
+      expect(screen.getByText("600.0k")).toBeInTheDocument();
+      expect(screen.getByText("30.0k")).toBeInTheDocument();
     });
 
     it("separates machine-wide from hive-connected usage", () => {
@@ -222,5 +234,13 @@ describe("cost display", () => {
   it("omits cost entirely for an unpriced model", () => {
     render(<SessionUsageBar usage={sessionUsage({ estimatedCostUsd: null })} />);
     expect(screen.queryByText(/^~\$/)).not.toBeInTheDocument();
+  });
+});
+
+describe("token accounting helpers", () => {
+  it("workTokens leaves cache out; totalTokens includes it", () => {
+    const t = tokens({ input: 10, output: 20, cacheRead: 900, cacheCreation: 70 });
+    expect(workTokens(t)).toBe(30);
+    expect(totalTokens(t)).toBe(1000);
   });
 });

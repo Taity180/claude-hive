@@ -16,8 +16,21 @@ export function formatTokens(tokens: number): string {
   return String(tokens);
 }
 
+/** Every token, cache included. Dominated by cache reads in practice. */
 export function totalTokens(usage: TokenUsage): number {
   return usage.input + usage.output + usage.cacheRead + usage.cacheCreation;
+}
+
+/**
+ * Input + output only — the headline "tokens used" figure.
+ *
+ * Cache reads run ~300x the input+output volume on a long session, so a total
+ * that includes them says more about how much history is being re-sent each
+ * turn than about how much work happened. This is also the basis the 7-day
+ * series uses, so the two agree.
+ */
+export function workTokens(usage: TokenUsage): number {
+  return usage.input + usage.output;
 }
 
 /** Green until the window is over half full, amber past 75%, red past 90%. */
@@ -55,8 +68,10 @@ export function SessionUsageBar({ usage }: { usage: SessionUsage }) {
           </span>
         )}
         <div className="flex-1" />
-        <span title="Total tokens this session has used">
-          {formatTokens(totalTokens(usage.total))} total
+        <span
+          title={`Input + output. ${formatTokens(totalTokens(usage.total))} including cache reads and writes.`}
+        >
+          {formatTokens(workTokens(usage.total))} total
         </span>
         {formatCost(usage.estimatedCostUsd) && (
           <span title="Estimated at published API rates — not a bill. Subscription plans are not charged per token.">
@@ -100,15 +115,17 @@ export function GlobalUsage() {
 
   if (!usage || totalTokens(usage.today) === 0) return null;
 
-  const machine = totalTokens(usage.today);
-  const connected = totalTokens(usage.todayConnected);
+  const machine = workTokens(usage.today);
+  const withCache = totalTokens(usage.today);
+  const connected = workTokens(usage.todayConnected);
   const cost = formatCost(usage.todayCostUsd);
   const peak = Math.max(1, ...usage.days.map((d) => d.tokens));
 
   // Rank today's spenders, naming the ones the hive recognises.
   const spenders = usage.sessions
     .map((u) => ({
-      tokens: totalTokens(u.today),
+      // Same basis as the headline total, so the rows sum to it.
+      tokens: workTokens(u.today),
       name: sessions.find((s) => s.claudeSessionId === u.claudeSessionId),
     }))
     .filter((s) => s.tokens > 0)
@@ -152,9 +169,10 @@ export function GlobalUsage() {
 
             <Row label="Input" value={formatTokens(usage.today.input)} />
             <Row label="Output" value={formatTokens(usage.today.output)} />
+            <Row label="Total" value={formatTokens(machine)} strong />
             <Row label="Cache read" value={formatTokens(usage.today.cacheRead)} />
             <Row label="Cache write" value={formatTokens(usage.today.cacheCreation)} />
-            <Row label="Total" value={formatTokens(machine)} strong />
+            <Row label="Incl. cache" value={formatTokens(withCache)} />
             <Row label="On the hive" value={formatTokens(connected)} />
             {cost && <Row label="Est. cost" value={`~${cost}`} />}
 
