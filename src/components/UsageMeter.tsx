@@ -158,8 +158,12 @@ export function GlobalUsage() {
             <Row label="On the hive" value={formatTokens(connected)} />
             {cost && <Row label="Est. cost" value={`~${cost}`} />}
 
-            <p className="text-[10px] font-medium mt-3 mb-1.5" style={{ color: "var(--hub-text)" }}>
-              Last 7 days
+            <p
+              className="text-[10px] font-medium mt-3 mb-1.5"
+              style={{ color: "var(--hub-text)" }}
+              title="Input + output only. Claude Code's daily history excludes cache traffic, so the cache buckets are left out to keep every day on one basis."
+            >
+              Last 7 days · input + output
             </p>
             <div className="flex items-end gap-1 h-10">
               {usage.days.map((day) => (

@@ -175,20 +175,24 @@ impl UsageScanner {
             sessions,
             today: today_total,
             today_connected,
-            days: recent_days(today, today_total.total()),
+            // Input + output only, to match the basis the history is on.
+            days: recent_days(today, today_total.input + today_total.output),
             today_cost_usd: today_cost,
             scanned_at: *self.scanned_at.read().await,
         }
     }
 }
 
-/// The last `HISTORY_DAYS` days, oldest first.
+/// The last `HISTORY_DAYS` days, oldest first, as input + output tokens.
 ///
 /// Today comes from the live scan. Earlier days come from Claude Code's
 /// `stats-cache.json`, because the scanner only opens transcripts touched in
 /// the last 36 hours and so cannot see further back. That cache is recomputed
-/// daily and lags — which is exactly why today is taken from the live scan
-/// instead, and why each day says which source it came from.
+/// daily and lags — which is why today is taken from the live scan instead,
+/// and why each day records which source it came from.
+///
+/// `today_tokens` must be input + output only. The cache buckets are excluded
+/// because the history source excludes them; see `DailyUsage`.
 fn recent_days(today: NaiveDate, today_tokens: u64) -> Vec<DailyUsage> {
     let history = read_stats_cache_history().unwrap_or_default();
     (0..HISTORY_DAYS)
@@ -517,6 +521,29 @@ mod tests {
 
         scanner.scan().await;
         assert_eq!(scanner.snapshot(&[]).await.sessions[0].total.input, 3);
+    }
+
+
+    #[tokio::test]
+    async fn the_daily_series_counts_input_and_output_only() {
+        // Claude Code's stats-cache history excludes cache traffic. Counting it
+        // for today would make today's bar dwarf every other day by ~300x.
+        let dir = tempfile::tempdir().unwrap();
+        transcript(
+            dir.path(),
+            "sess-1",
+            &[&turn(10, 20, 100_000, "claude-opus-5", &today_at("01:00:00+00:00"))],
+        );
+
+        let scanner = UsageScanner::with_root(dir.path().to_path_buf());
+        scanner.scan().await;
+        let snap = scanner.snapshot(&[]).await;
+
+        let today = snap.days.last().unwrap();
+        assert!(today.live);
+        assert_eq!(today.tokens, 30, "input + output, not the 100k cache read");
+        // The full picture is still available, just not in the series.
+        assert_eq!(snap.today.cache_read, 100_000);
     }
 
     #[tokio::test]

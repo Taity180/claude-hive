@@ -159,11 +159,15 @@ impl SessionUsage {
     }
 }
 
-/// One calendar day's machine-wide token total.
+/// One calendar day's machine-wide token total, counting **input + output
+/// only** — no cache reads or writes.
 ///
-/// A flat number rather than a `TokenUsage` because history comes from Claude
-/// Code's own `stats-cache.json`, which records one total per model per day
-/// and does not break it down.
+/// That basis is forced by the history source. Claude Code's
+/// `stats-cache.json` records one number per model per day and it excludes
+/// cache traffic; measured against the same day, the cache is ~300x the
+/// input+output volume. Plotting today's all-inclusive total next to
+/// cache-free history would make today's bar dwarf every other day and mean
+/// nothing. The full split for today lives on `UsageSnapshot::today`.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct DailyUsage {
