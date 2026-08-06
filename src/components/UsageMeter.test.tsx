@@ -85,7 +85,7 @@ describe("SessionUsageBar", () => {
 
 describe("GlobalUsage", () => {
   beforeEach(() => {
-    useHubStore.setState({ usage: null });
+    useHubStore.setState({ usage: null, viewState: "expanded" });
   });
 
   it("renders nothing before the first scan lands", () => {
@@ -124,6 +124,7 @@ describe("GlobalUsage", () => {
     beforeEach(() => {
       useHubStore.setState({
         sessions: [],
+        viewState: "expanded",
         usage: snapshot({
           today: tokens({ input: 10_000, output: 20_000, cacheRead: 500_000, cacheCreation: 70_000 }),
           todayConnected: tokens({ input: 200_000 }),
@@ -169,6 +170,7 @@ describe("GlobalUsage", () => {
 
     it("names the sessions the hive recognises and aggregates the rest", () => {
       useHubStore.setState({
+        viewState: "expanded",
         sessions: [
           {
             id: "s1",
@@ -242,5 +244,31 @@ describe("token accounting helpers", () => {
     const t = tokens({ input: 10, output: 20, cacheRead: 900, cacheCreation: 70 });
     expect(workTokens(t)).toBe(30);
     expect(totalTokens(t)).toBe(1000);
+  });
+});
+
+describe("GlobalUsage while collapsed", () => {
+  it("still shows the total, because that is the point of putting it in the title bar", () => {
+    useHubStore.setState({
+      viewState: "collapsed",
+      usage: snapshot({ today: tokens({ input: 500_000, output: 100_000 }) }),
+    });
+
+    render(<GlobalUsage />);
+    expect(screen.getByText("600.0k today")).toBeInTheDocument();
+  });
+
+  it("does not open a popover that the collapsed window would clip", () => {
+    useHubStore.setState({
+      viewState: "collapsed",
+      usage: snapshot({ today: tokens({ input: 500_000, output: 100_000 }) }),
+    });
+
+    render(<GlobalUsage />);
+    fireEvent.click(screen.getByRole("button"));
+
+    expect(screen.queryByText("Cache read")).not.toBeInTheDocument();
+    // The cache figure is still reachable without expanding.
+    expect(screen.getByRole("button").getAttribute("title")).toContain("including cache");
   });
 });

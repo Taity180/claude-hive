@@ -111,7 +111,13 @@ export function SessionUsageBar({ usage }: { usage: SessionUsage }) {
 export function GlobalUsage() {
   const usage = useHubStore((s) => s.usage);
   const sessions = useHubStore((s) => s.sessions);
+  const viewState = useHubStore((s) => s.viewState);
   const [open, setOpen] = useState(false);
+
+  // The collapsed window is barely taller than the title bar, so a popover
+  // would be clipped by the window bounds. The total still shows — it's the
+  // breakdown that needs room.
+  const canExpand = viewState !== "collapsed";
 
   if (!usage || totalTokens(usage.today) === 0) return null;
 
@@ -136,18 +142,24 @@ export function GlobalUsage() {
   return (
     <div className="relative">
       <button
-        onClick={() => setOpen(!open)}
-        className="text-[10px] opacity-40 hover:opacity-70 transition-opacity px-1.5 py-0.5 rounded"
+        onClick={() => canExpand && setOpen(!open)}
+        disabled={!canExpand}
+        className="text-[10px] opacity-40 hover:opacity-70 transition-opacity px-1.5 py-0.5 rounded disabled:hover:opacity-40"
         style={{
           color: "var(--hub-text)",
           background: open ? "var(--hub-surface)" : "transparent",
+          cursor: canExpand ? "pointer" : "default",
         }}
-        title="Token usage today — click for the breakdown"
+        title={
+          canExpand
+            ? "Tokens today (input + output) — click for the breakdown"
+            : `Tokens today (input + output). ${formatTokens(withCache)} including cache. Expand the hub for the full breakdown.`
+        }
       >
         {formatTokens(machine)} today{cost ? ` · ~${cost}` : ""}
       </button>
 
-      {open &&
+      {open && canExpand &&
         createPortal(
           <div
             style={{

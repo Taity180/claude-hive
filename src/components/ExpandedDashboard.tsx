@@ -3,7 +3,6 @@ import { createPortal } from "react-dom";
 import { useHubStore } from "../stores/hubStore";
 import { SessionPill } from "./SessionPill";
 import { InlineRename } from "./InlineRename";
-import { GlobalUsage } from "./UsageMeter";
 import type { Session, SessionViewMode } from "../types";
 
 const statusLegend = [
@@ -353,7 +352,6 @@ export function ExpandedDashboard() {
         </button>
 
         <div className="flex-1" />
-        <GlobalUsage />
         <button
           onClick={() => setViewState("settings")}
           className="text-[10px] opacity-40 hover:opacity-70 transition-opacity px-1.5 py-0.5 rounded"
