@@ -8,16 +8,29 @@ export function usageColor(pct: number): string {
   return "#22c55e";
 }
 
-/** "2h 14m" until the window rolls over, or null if it already has. */
+/**
+ * "2h 14m" until the window rolls over, or null if it already has.
+ *
+ * Rolls up to days past 24 hours: the weekly window is often five days out,
+ * and "128h 9m" is a number you have to do arithmetic on to understand.
+ */
 export function timeUntil(iso: string | null, now = Date.now()): string | null {
   if (!iso) return null;
   const ms = new Date(iso).getTime() - now;
   if (!Number.isFinite(ms) || ms <= 0) return null;
+
   const minutes = Math.round(ms / 60_000);
   if (minutes < 60) return `${minutes}m`;
+
   const hours = Math.floor(minutes / 60);
-  const rest = minutes % 60;
-  return rest ? `${hours}h ${rest}m` : `${hours}h`;
+  if (hours < 24) {
+    const rest = minutes % 60;
+    return rest ? `${hours}h ${rest}m` : `${hours}h`;
+  }
+
+  const days = Math.floor(hours / 24);
+  const rest = hours % 24;
+  return rest ? `${days}d ${rest}h` : `${days}d`;
 }
 
 /** Local clock time a window resets at, e.g. "14:20". */

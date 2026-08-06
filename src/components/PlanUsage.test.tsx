@@ -41,6 +41,13 @@ describe("timeUntil", () => {
     expect(timeUntil("2026-08-07T15:00:00Z", now)).toBe("3h");
   });
 
+  it("rolls up to days for the weekly window, which is often days out", () => {
+    // "128h 9m" is a number you have to do arithmetic on.
+    expect(timeUntil("2026-08-12T20:09:00Z", now)).toBe("5d 8h");
+    expect(timeUntil("2026-08-09T12:00:00Z", now)).toBe("2d");
+    expect(timeUntil("2026-08-08T11:00:00Z", now)).toBe("23h");
+  });
+
   it("returns null once the window has already reset", () => {
     expect(timeUntil("2026-08-07T11:00:00Z", now)).toBeNull();
   });
