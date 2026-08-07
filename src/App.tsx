@@ -42,6 +42,8 @@ function WindowBar({ barRef, captureExpandedHeight }: WindowBarProps) {
   const setViewState = useHubStore((s) => s.setViewState);
   const setActiveSession = useHubStore((s) => s.setActiveSession);
   const sessions = useHubStore((s) => s.sessions);
+  const usagePanelOpen = useHubStore((s) => s.usagePanelOpen);
+  const setUsagePanelOpen = useHubStore((s) => s.setUsagePanelOpen);
 
   const handleMinimize = () => {
     void invokeCommand("minimize_window");
@@ -58,6 +60,14 @@ function WindowBar({ barRef, captureExpandedHeight }: WindowBarProps) {
   };
 
   const handleCollapse = async () => {
+    // The breakdown panel grows a collapsed window to fit itself, so the hub
+    // can look expanded while `viewState` is still "collapsed". Closing the
+    // panel is all that's needed there — and capturing the grown height as the
+    // remembered expanded height would be wrong.
+    if (viewState === "collapsed") {
+      setUsagePanelOpen(false);
+      return;
+    }
     // Capture the user's current expanded height before collapsing so
     // "Expand" returns the window to exactly where they left it.
     await captureExpandedHeight();
@@ -166,14 +176,16 @@ function WindowBar({ barRef, captureExpandedHeight }: WindowBarProps) {
       )}
       {viewState === "collapsed" && (
         <button
-          onClick={handleExpand}
+          // An open breakdown has already grown the window, so offering
+          // "Expand" there would take two presses to get back to small.
+          onClick={usagePanelOpen ? handleCollapse : handleExpand}
           className="text-[10px] px-1.5 py-0.5 rounded transition-opacity hover:opacity-80"
           style={{
             background: "var(--hub-surface, rgba(255,255,255,0.06))",
             color: "var(--hub-text-muted, #777)",
           }}
         >
-          Expand
+          {usagePanelOpen ? "Collapse" : "Expand"}
         </button>
       )}
 
