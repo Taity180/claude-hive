@@ -214,11 +214,41 @@ pub async fn clear_messages(
     StatusCode::OK
 }
 
+/// Mark messages as delivered so they are not handed out again.
+///
+/// Without this the `read` flag never flips, `unreadOnly` filters nothing, and
+/// anything that injects pending messages would re-inject the same ones every
+/// time it looked.
+pub async fn mark_messages_read(
+    State(state): State<AppState>,
+    Path(session_id): Path<String>,
+    Json(request): Json<MarkReadRequest>,
+) -> StatusCode {
+    state.messages.mark_read(&session_id, &request.message_ids).await;
+    StatusCode::OK
+}
+
+/// Raise something the user should notice.
+///
+/// Native OS toasts were removed, so this persists to the session feed and
+/// leaves the dashboard to flag it unread. A tool that quietly did nothing
+/// would be worse than no tool.
 pub async fn notify(
     State(state): State<AppState>,
     Path(session_id): Path<String>,
     Json(request): Json<NotifyRequest>,
 ) -> StatusCode {
+    let content = if request.body.is_empty() {
+        request.title.clone()
+    } else {
+        format!("{} — {}", request.title, request.body)
+    };
+    let message = state
+        .messages
+        .add_message(&session_id, MessageFrom::Session, None, content, MessageType::Completion)
+        .await;
+    let _ = state.event_tx.send(WsEvent::NewMessage { message });
+
     let _ = state.event_tx.send(WsEvent::Notification {
         session_id,
         title: request.title,

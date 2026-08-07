@@ -129,7 +129,7 @@ Retrieve messages sent to your session from the hive dashboard or from other ses
 
 ### hub_notify — MANDATORY for task completion and blocking events
 
-Trigger a native desktop notification on the user's machine. Call this at least once per user request, typically on completion — the user may be on a different virtual desktop and has no other way to know you need them.
+Raise something the user should notice. Native OS toasts were removed in 1.0.7 — this now posts to the session feed and flags the session unread on the dashboard. Call this at least once per user request, typically on completion — the user may be on a different virtual desktop and has no other way to know you need them.
 
 **Parameters:**
 | Param | Type | Required | Description |

@@ -74,6 +74,7 @@ pub fn create_router(state: AppState, static_dir: Option<std::path::PathBuf>) ->
         .route("/api/sessions/{session_id}/messages", post(send_message))
         .route("/api/sessions/{session_id}/messages", get(get_all_messages))
         .route("/api/sessions/{session_id}/messages/clear", delete(clear_messages))
+        .route("/api/sessions/{session_id}/messages/read", post(mark_messages_read))
         .route("/api/sessions/{session_id}/messages/query", post(get_messages))
         .route("/api/sessions/{session_id}/messages/user", post(send_user_message))
         .route("/api/sessions/{session_id}/broadcast", post(broadcast_message))

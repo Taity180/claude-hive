@@ -187,8 +187,16 @@ export const useHubStore = create<HubState>((set) => ({
           };
         }
 
-        case "notification":
-          return {};
+        case "notification": {
+          // With native toasts gone, an unread pill is how a notification gets
+          // noticed. The body is also persisted to the feed server-side.
+          const isViewingThis =
+            state.activeSessionId === event.sessionId &&
+            state.viewState === "session-detail";
+          return isViewingThis
+            ? {}
+            : { unreadSessions: new Set([...state.unreadSessions, event.sessionId]) };
+        }
 
         case "questionAsked": {
           const { question } = event;
