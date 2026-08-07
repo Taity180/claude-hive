@@ -1,5 +1,5 @@
 use serde::Serialize;
-use super::{Session, SessionStatus, Message, NotifyPriority};
+use super::{Session, SessionStatus, Message, NotifyPriority, Question};
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
@@ -14,4 +14,8 @@ pub enum WsEvent {
     NewMessage { message: Message },
     #[serde(rename_all = "camelCase")]
     Notification { session_id: String, title: String, body: String, priority: NotifyPriority },
+    #[serde(rename_all = "camelCase")]
+    QuestionAsked { question: Question },
+    #[serde(rename_all = "camelCase")]
+    QuestionAnswered { session_id: String, question_id: String, answer: Vec<String> },
 }

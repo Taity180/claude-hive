@@ -7,6 +7,7 @@ use axum::{
 
 use crate::models::*;
 use crate::server::app_state::AppState;
+use crate::state::AnswerError;
 
 pub async fn health() -> &'static str {
     "ok"
@@ -33,6 +34,7 @@ pub async fn unregister_session(
 ) -> StatusCode {
     if let Some(_session) = state.sessions.unregister(&session_id).await {
         state.messages.remove_session(&session_id).await;
+        state.questions.remove_session(&session_id).await;
         let _ = state.event_tx.send(WsEvent::SessionDisconnected {
             session_id,
         });
@@ -224,4 +226,151 @@ pub async fn notify(
         priority: request.priority,
     });
     StatusCode::OK
+}
+
+// ── Questions ──────────────────────────────────────────────────────────
+//
+// A question is a message the session is blocked on. Asking one flips the
+// session to waiting_for_input and answering it flips it back, which makes the
+// status pill reflect reality rather than depending on the model remembering
+// to call hub_set_status.
+
+/// Move a session's status and tell the dashboard, without the feed message
+/// `update_session_status` would add — questions post their own.
+async fn set_status_silently(
+    state: &AppState,
+    session_id: &str,
+    status: SessionStatus,
+    detail: Option<String>,
+) {
+    let updated = state
+        .sessions
+        .update_status(
+            session_id,
+            UpdateStatusRequest {
+                status: status.clone(),
+                detail: detail.clone(),
+                silent: true,
+            },
+        )
+        .await;
+
+    if updated.is_some() {
+        let _ = state.event_tx.send(WsEvent::StatusChanged {
+            session_id: session_id.to_string(),
+            status,
+            detail,
+        });
+    }
+}
+
+pub async fn ask_question(
+    State(state): State<AppState>,
+    Path(session_id): Path<String>,
+    Json(request): Json<AskRequest>,
+) -> Result<(StatusCode, Json<Question>), (StatusCode, String)> {
+    if let Some(error) = request.validation_error() {
+        return Err((StatusCode::BAD_REQUEST, error));
+    }
+    if state.sessions.get(&session_id).await.is_none() {
+        return Err((StatusCode::NOT_FOUND, "unknown session".to_string()));
+    }
+
+    let question = state.questions.ask(&session_id, request).await;
+
+    set_status_silently(
+        &state,
+        &session_id,
+        SessionStatus::WaitingForInput,
+        Some(question.question.clone()),
+    )
+    .await;
+
+    let message = state
+        .messages
+        .add_message(
+            &session_id,
+            MessageFrom::Session,
+            None,
+            question.question.clone(),
+            MessageType::Question,
+        )
+        .await;
+    let _ = state.event_tx.send(WsEvent::NewMessage { message });
+    let _ = state.event_tx.send(WsEvent::QuestionAsked {
+        question: question.clone(),
+    });
+
+    Ok((StatusCode::CREATED, Json(question)))
+}
+
+/// The session's current question, answered or not. `hub_ask` polls this for
+/// its answer; the dashboard uses it to restore a prompt after a reload.
+pub async fn get_question(
+    State(state): State<AppState>,
+    Path(session_id): Path<String>,
+) -> Json<Option<Question>> {
+    Json(state.questions.get(&session_id).await)
+}
+
+/// Every unanswered question, so a dashboard that just opened can show the
+/// prompts it missed.
+pub async fn list_pending_questions(State(state): State<AppState>) -> Json<Vec<Question>> {
+    Json(state.questions.all_pending().await)
+}
+
+pub async fn answer_question(
+    State(state): State<AppState>,
+    Path(session_id): Path<String>,
+    Json(request): Json<AnswerRequest>,
+) -> Result<(StatusCode, Json<Question>), (StatusCode, String)> {
+    let answered = state
+        .questions
+        .answer(&session_id, &request.question_id, request.answer)
+        .await
+        .map_err(|e| match e {
+            AnswerError::NoPendingQuestion => {
+                (StatusCode::NOT_FOUND, "no question is outstanding".to_string())
+            }
+            AnswerError::StaleQuestion => (
+                StatusCode::CONFLICT,
+                "that question has been replaced by a newer one".to_string(),
+            ),
+            AnswerError::AlreadyAnswered => {
+                (StatusCode::CONFLICT, "that question is already answered".to_string())
+            }
+            AnswerError::InvalidChoice(reason) => (StatusCode::BAD_REQUEST, reason),
+        })?;
+
+    let answer = answered.answer.clone().unwrap_or_default();
+
+    // Echo the choice into the feed so the exchange reads as a conversation,
+    // and hand it to the session the same way a typed reply arrives.
+    let message = state
+        .messages
+        .add_message(
+            &session_id,
+            MessageFrom::User,
+            None,
+            answer.join(", "),
+            MessageType::Info,
+        )
+        .await;
+    let _ = state.event_tx.send(WsEvent::NewMessage { message });
+
+    set_status_silently(
+        &state,
+        &session_id,
+        SessionStatus::Running,
+        Some("Answer received".to_string()),
+    )
+    .await;
+
+    let _ = state.event_tx.send(WsEvent::QuestionAnswered {
+        session_id,
+        question_id: answered.id.clone(),
+        answer,
+    });
+
+    Ok((StatusCode::OK, Json(answered)))
 }

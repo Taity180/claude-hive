@@ -1,5 +1,6 @@
 use std::io::{self, BufRead, Write};
 use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 use serde_json::{json, Value};
 
 use super::types::*;
@@ -440,8 +441,11 @@ impl McpHandler {
         // Auto-recovery: if status is "waiting_for_input" and Claude is making
         // tool calls (other than status/get_messages), it means Claude resumed
         // after a permission prompt — auto-set back to "running".
+        // hub_ask is excluded because it *deliberately* sets waiting_for_input:
+        // recovering from it would clear the pill while the user is still
+        // looking at the question.
         if self.current_status == "waiting_for_input"
-            && !matches!(tool_name, "hub_set_status" | "hub_get_messages")
+            && !matches!(tool_name, "hub_set_status" | "hub_get_messages" | "hub_ask")
         {
             eprintln!("[claude-hive] Auto-recovering from waiting_for_input → running");
             let _ = self.client
@@ -457,6 +461,7 @@ impl McpHandler {
             "hub_get_messages" => self.tool_get_messages(&session_id, arguments),
             "hub_notify" => self.tool_notify(&session_id, arguments),
             "hub_broadcast" => self.tool_broadcast(&session_id, arguments),
+            "hub_ask" => self.tool_ask(&session_id, arguments),
             _ => Err(format!("Unknown tool: {}", tool_name)),
         };
 
@@ -602,6 +607,89 @@ impl McpHandler {
             .map_err(|e| e.to_string())?;
 
         Ok(format!("Notification sent: {}", title))
+    }
+
+    /// Post a multiple-choice question to the dashboard and block until the
+    /// user clicks an option.
+    ///
+    /// Blocking is the point. A non-blocking version would need the model to
+    /// remember to poll hub_get_messages, and a model that forgets leaves the
+    /// user staring at a question nobody is waiting on. Holding the tool call
+    /// open makes it behave the way asking a question should: work stops until
+    /// there's an answer.
+    ///
+    /// Blocking the stdin loop is safe here because MCP tool calls for a
+    /// session are sequential anyway, and the WebSocket listener runs on its
+    /// own thread so message notifications keep flowing.
+    fn tool_ask(&mut self, session_id: &str, args: &Value) -> Result<String, String> {
+        let question = args["question"].as_str().ok_or("question is required")?;
+        let options: Vec<String> = args["options"]
+            .as_array()
+            .ok_or("options is required")?
+            .iter()
+            .filter_map(|o| o.as_str().map(|s| s.to_string()))
+            .collect();
+        if options.len() < 2 {
+            return Err("at least 2 options are required".to_string());
+        }
+        let multi_select = args["multi_select"].as_bool().unwrap_or(false);
+        let timeout = Duration::from_secs(
+            args["timeout_seconds"].as_f64().unwrap_or(300.0).clamp(10.0, 1800.0) as u64,
+        );
+
+        let response = self
+            .client
+            .post(format!("{}/api/sessions/{}/ask", self.hub_url, session_id))
+            .json(&json!({
+                "question": question,
+                "options": options,
+                "multiSelect": multi_select
+            }))
+            .send()
+            .map_err(|e| e.to_string())?;
+
+        if !response.status().is_success() {
+            return Err(format!(
+                "hive rejected the question: {}",
+                response.text().unwrap_or_default()
+            ));
+        }
+
+        let asked: Value = response.json().map_err(|e| e.to_string())?;
+        let question_id = asked["id"].as_str().unwrap_or_default().to_string();
+        self.current_status = "waiting_for_input".to_string();
+        eprintln!("[claude-hive] Asked question {}, waiting for an answer", question_id);
+
+        let deadline = Instant::now() + timeout;
+        while Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(400));
+
+            let poll = self
+                .client
+                .get(format!("{}/api/sessions/{}/ask", self.hub_url, session_id))
+                .send()
+                .and_then(|r| r.json::<Value>());
+
+            let Ok(current) = poll else { continue };
+
+            // A different id means the session asked something else in the
+            // meantime; there is no answer coming for this one.
+            if current["id"].as_str().unwrap_or_default() != question_id {
+                return Ok("Question was replaced before it was answered.".to_string());
+            }
+
+            if let Some(answer) = current["answer"].as_array() {
+                let chosen: Vec<&str> = answer.iter().filter_map(|a| a.as_str()).collect();
+                self.current_status = "running".to_string();
+                return Ok(format!("User selected: {}", chosen.join(", ")));
+            }
+        }
+
+        self.current_status = "running".to_string();
+        Ok(format!(
+            "No answer within {}s — the user did not respond on the dashboard. Ask in the terminal instead.",
+            timeout.as_secs()
+        ))
     }
 
     fn tool_broadcast(&self, session_id: &str, args: &Value) -> Result<String, String> {

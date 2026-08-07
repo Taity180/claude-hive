@@ -1,6 +1,8 @@
 import { useEffect, useRef } from "react";
 import { useHubStore } from "../stores/hubStore";
 import { ChatMessage } from "./ChatMessage";
+import { ChatInput } from "./ChatInput";
+import { QuestionPrompt } from "./QuestionPrompt";
 import { api } from "../api";
 import type { Message } from "../types";
 
@@ -29,6 +31,9 @@ export function SessionDetail() {
     activeSessionId ? s.messages[activeSessionId] : undefined
   ) ?? EMPTY_MESSAGES;
   const setActiveSession = useHubStore((s) => s.setActiveSession);
+  const question = useHubStore((s) =>
+    activeSessionId ? s.questions[activeSessionId] : undefined
+  );
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const session = sessions.find((s) => s.id === activeSessionId);
@@ -192,6 +197,30 @@ export function SessionDetail() {
         )}
       </div>
 
+      {question && (
+        <div className="px-3 pt-2">
+          <QuestionPrompt question={question} />
+        </div>
+      )}
+
+      <ChatInput
+        placeholder={`Reply to ${session.customName || session.projectName}...`}
+        onSend={async (message) => {
+          const resp = await fetch(
+            `${api.baseUrl}/api/sessions/${session.id}/messages/user`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ message }),
+            }
+          );
+          // The hub echoes the message back over the WebSocket, which is what
+          // puts it in the feed. Nothing to add locally on success.
+          if (!resp.ok) {
+            console.error("[hive] failed to send reply:", await resp.text());
+          }
+        }}
+      />
     </div>
   );
 }

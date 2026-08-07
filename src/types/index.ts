@@ -32,6 +32,22 @@ export interface Message {
   read: boolean;
 }
 
+/**
+ * A multiple-choice question a session is blocked on. The session's `hub_ask`
+ * tool call stays open until `answer` is filled in, so answering one from the
+ * dashboard is what unblocks the session.
+ */
+export interface Question {
+  id: string;
+  sessionId: string;
+  question: string;
+  options: string[];
+  multiSelect: boolean;
+  askedAt: string;
+  answer: string[] | null;
+  answeredAt: string | null;
+}
+
 export type NotifyPriority = "low" | "normal" | "high";
 
 export type WsEvent =
@@ -50,6 +66,13 @@ export type WsEvent =
       title: string;
       body: string;
       priority: NotifyPriority;
+    }
+  | { type: "questionAsked"; question: Question }
+  | {
+      type: "questionAnswered";
+      sessionId: string;
+      questionId: string;
+      answer: string[];
     };
 
 export type ViewState = "collapsed" | "expanded" | "session-detail" | "settings";

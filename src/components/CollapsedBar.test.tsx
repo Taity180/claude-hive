@@ -4,7 +4,7 @@ import { createRef } from "react";
 import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import { CollapsedBar } from "./CollapsedBar";
 import { useHubStore } from "../stores/hubStore";
-import type { Session } from "../types";
+import type { Question, Session } from "../types";
 
 function session(overrides: Partial<Session> = {}): Session {
   return {
@@ -18,6 +18,20 @@ function session(overrides: Partial<Session> = {}): Session {
     connectedAt: "2026-01-01T00:00:00Z",
     lastActivity: "2026-01-01T00:00:00Z",
     windowHandle: 1234,
+    ...overrides,
+  };
+}
+
+function question(overrides: Partial<Question> = {}): Question {
+  return {
+    id: "q1",
+    sessionId: "s1",
+    question: "JWT or session cookies?",
+    options: ["JWT", "Session cookies"],
+    multiSelect: false,
+    askedAt: "2026-01-01T00:00:00Z",
+    answer: null,
+    answeredAt: null,
     ...overrides,
   };
 }
@@ -145,5 +159,62 @@ describe("CollapsedBar", () => {
 
       expect(screen.queryByTitle("Go to session desktop")).not.toBeInTheDocument();
     });
+  });
+});
+
+describe("pending questions in the collapsed bar", () => {
+  function renderAsking(overrides = {}) {
+    useHubStore.setState({
+      sessions: [session({ status: "waiting_for_input" })],
+      messages: {},
+      questions: { s1: question(overrides) },
+      unreadSessions: new Set(),
+      activeSessionId: null,
+      viewState: "collapsed",
+    });
+    return render(<CollapsedBar />);
+  }
+
+  it("shows the question and its options instead of a bare count", () => {
+    renderAsking();
+
+    expect(screen.getByText("JWT or session cookies?")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "JWT" })).toBeInTheDocument();
+    expect(screen.queryByText(/waiting$/)).not.toBeInTheDocument();
+  });
+
+  it("answers without leaving the collapsed bar", async () => {
+    const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) => ({
+      ok: true,
+      text: async () => "",
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    renderAsking();
+
+    fireEvent.click(screen.getByRole("button", { name: "Session cookies" }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    expect(fetchMock.mock.calls[0][0]).toContain("/api/sessions/s1/ask/answer");
+    expect(useHubStore.getState().viewState).toBe("collapsed");
+  });
+
+  it("still counts sessions that are waiting on something other than a question", () => {
+    useHubStore.setState({
+      sessions: [
+        session({ id: "s1", status: "waiting_for_input" }),
+        session({ id: "s2", status: "error" }),
+      ],
+      messages: {},
+      questions: { s1: question() },
+      unreadSessions: new Set(),
+    });
+    render(<CollapsedBar />);
+
+    expect(screen.getByText("1 waiting")).toBeInTheDocument();
+  });
+
+  it("shows no count when every waiting session has a question on screen", () => {
+    renderAsking();
+    expect(screen.queryByText(/^\d+ waiting$/)).not.toBeInTheDocument();
   });
 });
