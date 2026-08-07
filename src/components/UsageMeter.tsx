@@ -129,7 +129,13 @@ export function GlobalUsage() {
       report();
       const observer = new ResizeObserver(report);
       observer.observe(node);
-      return () => observer.disconnect();
+      return () => {
+        observer.disconnect();
+        // React calls this cleanup *instead of* invoking the ref with null, so
+        // the height must be cleared here. Leaving it set makes the collapsed
+        // sizer keep reserving room for a panel that has already closed.
+        setPanelHeight(0);
+      };
     },
     [setPanelHeight],
   );

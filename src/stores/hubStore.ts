@@ -70,7 +70,8 @@ export const useHubStore = create<HubState>((set) => ({
   unreadSessions: new Set(),
   expandedHeight: DEFAULT_EXPANDED_HEIGHT,
 
-  setViewState: (viewState) => set({ viewState, usagePanelOpen: false }),
+  setViewState: (viewState) =>
+    set({ viewState, usagePanelOpen: false, usagePanelHeight: 0 }),
 
   setExpandedHeight: (height) =>
     set({ expandedHeight: Math.max(MIN_EXPANDED_HEIGHT, height) }),
@@ -79,6 +80,7 @@ export const useHubStore = create<HubState>((set) => ({
     set((state) => ({
       activeSessionId,
       usagePanelOpen: false,
+      usagePanelHeight: 0,
       viewState: activeSessionId ? "session-detail" : "expanded",
       // Clear unread when user clicks into a session
       unreadSessions: activeSessionId
@@ -102,7 +104,10 @@ export const useHubStore = create<HubState>((set) => ({
 
   setPlanUsage: (planUsage) => set({ planUsage }),
 
-  setUsagePanelOpen: (usagePanelOpen) => set({ usagePanelOpen }),
+  setUsagePanelOpen: (usagePanelOpen) =>
+    // Closing always releases the height the panel had reserved. A stale value
+    // would leave the collapsed window sized for a panel that is gone.
+    set(usagePanelOpen ? { usagePanelOpen } : { usagePanelOpen, usagePanelHeight: 0 }),
 
   setUsagePanelHeight: (usagePanelHeight) => set({ usagePanelHeight }),
 

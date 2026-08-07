@@ -275,6 +275,31 @@ describe("GlobalUsage while collapsed", () => {
     expect(screen.getByText("Cache read")).toBeInTheDocument();
   });
 
+  it("releases its reserved height when it closes, so the window can shrink back", () => {
+    useHubStore.setState({
+      viewState: "collapsed",
+      usagePanelOpen: true,
+      // A height measured while the panel was open.
+      usagePanelHeight: 240,
+      usage: snapshot({ today: tokens({ input: 500_000, output: 100_000 }) }),
+    });
+
+    useHubStore.getState().setUsagePanelOpen(false);
+
+    // Left set, the collapsed sizer keeps reserving room for a panel that is
+    // gone and the window never shrinks back.
+    expect(useHubStore.getState().usagePanelHeight).toBe(0);
+  });
+
+  it("releases its reserved height when the view changes too", () => {
+    useHubStore.setState({ usagePanelOpen: true, usagePanelHeight: 240 });
+
+    useHubStore.getState().setViewState("collapsed");
+
+    expect(useHubStore.getState().usagePanelOpen).toBe(false);
+    expect(useHubStore.getState().usagePanelHeight).toBe(0);
+  });
+
   it("closes itself when the view changes", () => {
     useHubStore.setState({
       viewState: "collapsed",
