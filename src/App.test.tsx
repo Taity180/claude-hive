@@ -32,6 +32,8 @@ describe("App window sizing", () => {
       activeSessionId: null,
       unreadSessions: new Set(),
       expandedHeight: DEFAULT_EXPANDED_HEIGHT,
+      usagePanelOpen: false,
+      usagePanelHeight: 0,
     });
   });
 
@@ -154,5 +156,64 @@ describe("App window sizing", () => {
     await waitFor(() => {
       expect(invokeMock).toHaveBeenCalledWith("update_tray_badge", { count: 0 });
     });
+  });
+});
+
+describe("collapse button while the usage breakdown is open", () => {
+  beforeEach(() => {
+    invokeMock.mockClear();
+    invokeMock.mockResolvedValue(null);
+    useHubStore.setState({
+      sessions: [],
+      messages: {},
+      viewState: "collapsed",
+      activeSessionId: null,
+      unreadSessions: new Set(),
+      expandedHeight: DEFAULT_EXPANDED_HEIGHT,
+      usagePanelOpen: false,
+      usagePanelHeight: 0,
+    });
+  });
+
+  const button = (c: HTMLElement) =>
+    [...c.querySelectorAll("button")].find(
+      (b) => b.textContent === "Expand" || b.textContent === "Collapse",
+    )!;
+
+  it("offers Expand when nothing is open", () => {
+    const { container } = render(<App />);
+    expect(button(container).textContent).toBe("Expand");
+  });
+
+  it("offers Collapse once the breakdown has grown the window", () => {
+    const { container } = render(<App />);
+    act(() => { useHubStore.getState().setUsagePanelOpen(true); });
+    // Offering "Expand" here would take two presses to get back to small.
+    expect(button(container).textContent).toBe("Collapse");
+  });
+
+  it("collapses in a single press by closing the panel", () => {
+    const { container } = render(<App />);
+    act(() => { useHubStore.getState().setUsagePanelOpen(true); });
+
+    act(() => { button(container).click(); });
+
+    expect(useHubStore.getState().usagePanelOpen).toBe(false);
+    // Still collapsed — the panel was the only thing making it tall.
+    expect(useHubStore.getState().viewState).toBe("collapsed");
+    expect(button(container).textContent).toBe("Expand");
+  });
+
+  it("does not record the grown height as the remembered expanded height", () => {
+    const { container } = render(<App />);
+    act(() => { useHubStore.getState().setUsagePanelOpen(true); });
+    invokeMock.mockClear();
+
+    act(() => { button(container).click(); });
+
+    // get_logical_size is how the expanded height is captured; capturing a
+    // window grown by the panel would corrupt it.
+    expect(invokeMock).not.toHaveBeenCalledWith("get_logical_size", undefined);
+    expect(useHubStore.getState().expandedHeight).toBe(DEFAULT_EXPANDED_HEIGHT);
   });
 });

@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { Session, Message, Question, ViewState, WsEvent } from "../types";
+import type { Session, Message, PlanUsageSnapshot, Question, UsageSnapshot, ViewState, WsEvent } from "../types";
 
 // Minimum sensible height for the expanded dashboard. Guards against a bad
 // value being persisted (e.g. someone resized the window to almost nothing
@@ -15,6 +15,18 @@ interface HubState {
   messages: Record<string, Message[]>;
   /** The unanswered question per session, if it has one. */
   questions: Record<string, Question>;
+  /** Token usage read from Claude Code transcripts, or null before first load. */
+  usage: UsageSnapshot | null;
+  /** Plan rate-limit windows, or null before the first poll. */
+  planUsage: PlanUsageSnapshot | null;
+  /** Whether the usage breakdown panel is showing. */
+  usagePanelOpen: boolean;
+  /**
+   * Measured height of that panel, so a collapsed window can grow to fit it.
+   * While collapsed the window is sized to hug its content, so an overlay has
+   * to be accounted for or the OS window clips it.
+   */
+  usagePanelHeight: number;
   viewState: ViewState;
   activeSessionId: string | null;
   unreadSessions: Set<string>;
@@ -28,6 +40,10 @@ interface HubState {
   setSessions: (sessions: Session[]) => void;
   setMessages: (sessionId: string, messages: Message[]) => void;
   setPendingQuestions: (questions: Question[]) => void;
+  setUsage: (usage: UsageSnapshot) => void;
+  setPlanUsage: (usage: PlanUsageSnapshot) => void;
+  setUsagePanelOpen: (open: boolean) => void;
+  setUsagePanelHeight: (height: number) => void;
   renameSession: (sessionId: string, name: string | null) => void;
   clearMessages: (sessionId: string) => void;
 }
@@ -45,12 +61,17 @@ export const useHubStore = create<HubState>((set) => ({
   sessions: [],
   messages: {},
   questions: {},
+  usage: null,
+  planUsage: null,
+  usagePanelOpen: false,
+  usagePanelHeight: 0,
   viewState: "collapsed",
   activeSessionId: null,
   unreadSessions: new Set(),
   expandedHeight: DEFAULT_EXPANDED_HEIGHT,
 
-  setViewState: (viewState) => set({ viewState }),
+  setViewState: (viewState) =>
+    set({ viewState, usagePanelOpen: false, usagePanelHeight: 0 }),
 
   setExpandedHeight: (height) =>
     set({ expandedHeight: Math.max(MIN_EXPANDED_HEIGHT, height) }),
@@ -58,6 +79,8 @@ export const useHubStore = create<HubState>((set) => ({
   setActiveSession: (activeSessionId) =>
     set((state) => ({
       activeSessionId,
+      usagePanelOpen: false,
+      usagePanelHeight: 0,
       viewState: activeSessionId ? "session-detail" : "expanded",
       // Clear unread when user clicks into a session
       unreadSessions: activeSessionId
@@ -76,6 +99,17 @@ export const useHubStore = create<HubState>((set) => ({
     set({
       questions: Object.fromEntries(questions.map((q) => [q.sessionId, q])),
     }),
+
+  setUsage: (usage) => set({ usage }),
+
+  setPlanUsage: (planUsage) => set({ planUsage }),
+
+  setUsagePanelOpen: (usagePanelOpen) =>
+    // Closing always releases the height the panel had reserved. A stale value
+    // would leave the collapsed window sized for a panel that is gone.
+    set(usagePanelOpen ? { usagePanelOpen } : { usagePanelOpen, usagePanelHeight: 0 }),
+
+  setUsagePanelHeight: (usagePanelHeight) => set({ usagePanelHeight }),
 
   addUserMessage: (sessionId, message) =>
     set((state) => ({
@@ -153,8 +187,16 @@ export const useHubStore = create<HubState>((set) => ({
           };
         }
 
-        case "notification":
-          return {};
+        case "notification": {
+          // With native toasts gone, an unread pill is how a notification gets
+          // noticed. The body is also persisted to the feed server-side.
+          const isViewingThis =
+            state.activeSessionId === event.sessionId &&
+            state.viewState === "session-detail";
+          return isViewingThis
+            ? {}
+            : { unreadSessions: new Set([...state.unreadSessions, event.sessionId]) };
+        }
 
         case "questionAsked": {
           const { question } = event;

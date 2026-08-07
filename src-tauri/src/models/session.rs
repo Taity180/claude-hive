@@ -30,6 +30,10 @@ pub struct Session {
     pub connected_at: DateTime<Utc>,
     pub last_activity: DateTime<Utc>,
     pub window_handle: Option<u64>,
+    /// Claude Code's own session id, reported by a hook. The transcript that
+    /// carries this session's token usage is named after it, which is what
+    /// lets the dashboard attribute usage exactly rather than by directory.
+    pub claude_session_id: Option<String>,
 }
 
 impl Session {

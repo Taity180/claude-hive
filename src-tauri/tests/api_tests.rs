@@ -265,3 +265,158 @@ async fn unregistering_a_session_drops_its_question() {
     let pending: Vec<Question> = server.get("/api/questions").await.json();
     assert!(pending.is_empty());
 }
+
+// ── Token usage ────────────────────────────────────────────────────────
+
+use claude_hive_lib::models::UsageSnapshot;
+
+#[tokio::test]
+async fn usage_starts_empty_and_does_not_error() {
+    let server = test_server();
+    let response = server.get("/api/usage").await;
+    response.assert_status_ok();
+
+    let snapshot: UsageSnapshot = response.json();
+    assert!(snapshot.sessions.is_empty());
+    assert_eq!(snapshot.today.total(), 0);
+}
+
+#[tokio::test]
+async fn a_hook_can_link_a_session_to_its_claude_session_id() {
+    let server = test_server();
+    let session = register(&server).await;
+    assert_eq!(session.claude_session_id, None);
+
+    server
+        .put(&format!("/api/sessions/{}/claude-session", session.id))
+        .json(&json!({ "claudeSessionId": "claude-abc" }))
+        .await
+        .assert_status_ok();
+
+    let sessions: Vec<Session> = server.get("/api/sessions").await.json();
+    assert_eq!(sessions[0].claude_session_id, Some("claude-abc".to_string()));
+}
+
+#[tokio::test]
+async fn linking_an_unknown_session_is_a_not_found() {
+    let server = test_server();
+    let response = server
+        .put("/api/sessions/nope/claude-session")
+        .json(&json!({ "claudeSessionId": "claude-abc" }))
+        .await;
+    response.assert_status(StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn re_registering_keeps_the_transcript_link() {
+    // A hive restart re-registers the session under the same id; losing the
+    // link here would silently orphan its usage until the next Stop hook.
+    let server = test_server();
+    let session = register(&server).await;
+    server
+        .put(&format!("/api/sessions/{}/claude-session", session.id))
+        .json(&json!({ "claudeSessionId": "claude-abc" }))
+        .await
+        .assert_status_ok();
+
+    server
+        .post("/api/sessions")
+        .json(&json!({ "id": session.id, "workingDirectory": "/home/user/my-project" }))
+        .await
+        .assert_status(StatusCode::CREATED);
+
+    let sessions: Vec<Session> = server.get("/api/sessions").await.json();
+    assert_eq!(sessions[0].claude_session_id, Some("claude-abc".to_string()));
+}
+
+// ── Message delivery ───────────────────────────────────────────────────
+
+#[tokio::test]
+async fn marking_messages_read_stops_them_being_pending() {
+    let server = test_server();
+    let session = register(&server).await;
+
+    let msg: claude_hive_lib::models::Message = server
+        .post(&format!("/api/sessions/{}/messages/user", session.id))
+        .json(&json!({ "message": "look at this" }))
+        .await
+        .json();
+
+    let unread: Vec<claude_hive_lib::models::Message> = server
+        .post(&format!("/api/sessions/{}/messages/query", session.id))
+        .json(&json!({ "unreadOnly": true }))
+        .await
+        .json();
+    assert_eq!(unread.len(), 1);
+
+    server
+        .post(&format!("/api/sessions/{}/messages/read", session.id))
+        .json(&json!({ "messageIds": [msg.id] }))
+        .await
+        .assert_status_ok();
+
+    // Without this the same message is injected on every turn, forever.
+    let unread: Vec<claude_hive_lib::models::Message> = server
+        .post(&format!("/api/sessions/{}/messages/query", session.id))
+        .json(&json!({ "unreadOnly": true }))
+        .await
+        .json();
+    assert!(unread.is_empty());
+
+    // Still readable in the feed — marking read is not deleting.
+    let all: Vec<claude_hive_lib::models::Message> = server
+        .get(&format!("/api/sessions/{}/messages", session.id))
+        .await
+        .json();
+    assert_eq!(all.len(), 1);
+}
+
+#[tokio::test]
+async fn marking_an_unknown_id_read_is_harmless() {
+    let server = test_server();
+    let session = register(&server).await;
+
+    server
+        .post(&format!("/api/sessions/{}/messages/read", session.id))
+        .json(&json!({ "messageIds": ["no-such-id"] }))
+        .await
+        .assert_status_ok();
+}
+
+#[tokio::test]
+async fn notify_lands_in_the_feed_now_that_toasts_are_gone() {
+    let server = test_server();
+    let session = register(&server).await;
+
+    server
+        .post(&format!("/api/sessions/{}/notify", session.id))
+        .json(&json!({ "title": "Done", "body": "Tests passing" }))
+        .await
+        .assert_status_ok();
+
+    // A tool that quietly did nothing would be worse than no tool.
+    let all: Vec<claude_hive_lib::models::Message> = server
+        .get(&format!("/api/sessions/{}/messages", session.id))
+        .await
+        .json();
+    assert_eq!(all.len(), 1);
+    assert_eq!(all[0].content, "Done — Tests passing");
+}
+
+#[tokio::test]
+async fn notify_without_a_body_uses_just_the_title() {
+    let server = test_server();
+    let session = register(&server).await;
+
+    server
+        .post(&format!("/api/sessions/{}/notify", session.id))
+        .json(&json!({ "title": "Done", "body": "" }))
+        .await
+        .assert_status_ok();
+
+    let all: Vec<claude_hive_lib::models::Message> = server
+        .get(&format!("/api/sessions/{}/messages", session.id))
+        .await
+        .json();
+    assert_eq!(all[0].content, "Done");
+}

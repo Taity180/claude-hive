@@ -17,6 +17,7 @@ const mockSession: Session = {
   connectedAt: "2026-04-12T00:00:00Z",
   lastActivity: "2026-04-12T00:00:00Z",
   windowHandle: null,
+  claudeSessionId: null,
 };
 
 const mockMessage: Message = {

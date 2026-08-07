@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, existsSync, readFileSync, readdirSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
 
-import { resolveSession, releaseClaim, pendingPath, claimKey } from "./hive.mjs";
+import { resolveSession, releaseClaim, pendingPath, claimKey, pendingInbox, markRead } from "./hive.mjs";
 
 const CWD = "C:\\repos\\my-app";
 
@@ -210,5 +210,67 @@ describe("payloads without a session id", () => {
   it("keeps a working pending flag path", () => {
     expect(pendingPath(noId)).toContain(".pending");
     expect(pendingPath(noId)).not.toContain("null");
+  });
+});
+
+describe("pendingInbox", () => {
+  function stubMessages(messages) {
+    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, json: async () => messages })));
+  }
+
+  it("returns messages the user typed into the dashboard", async () => {
+    stubMessages([{ id: "m1", from: "user", content: "hello" }]);
+    const inbox = await pendingInbox("http://hive", "s1");
+    expect(inbox.map((m) => m.id)).toEqual(["m1"]);
+  });
+
+  it("includes broadcasts from other sessions", async () => {
+    stubMessages([{ id: "m1", from: "broadcast", content: "heads up" }]);
+    expect((await pendingInbox("http://hive", "s1")).length).toBe(1);
+  });
+
+  it("excludes the session's own progress messages", async () => {
+    // Handing Claude back its own hub_send_message calls is an echo chamber.
+    stubMessages([
+      { id: "m1", from: "session", content: "Starting work" },
+      { id: "m2", from: "user", content: "actually stop" },
+    ]);
+    expect((await pendingInbox("http://hive", "s1")).map((m) => m.id)).toEqual(["m2"]);
+  });
+
+  it("returns nothing when the hive is unreachable", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => { throw new Error("ECONNREFUSED"); }));
+    expect(await pendingInbox("http://hive", "s1")).toEqual([]);
+  });
+
+  it("returns nothing on an unexpected payload", async () => {
+    stubMessages({ not: "an array" });
+    expect(await pendingInbox("http://hive", "s1")).toEqual([]);
+  });
+});
+
+describe("markRead", () => {
+  it("posts the consumed ids", async () => {
+    const fetchMock = vi.fn(async () => ({ ok: true }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await markRead("http://hive", "s1", ["m1", "m2"]);
+
+    expect(fetchMock.mock.calls[0][0]).toContain("/api/sessions/s1/messages/read");
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ messageIds: ["m1", "m2"] });
+  });
+
+  it("skips the request entirely when there is nothing to mark", async () => {
+    const fetchMock = vi.fn(async () => ({ ok: true }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await markRead("http://hive", "s1", []);
+
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("never throws when the hive is unreachable", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => { throw new Error("nope"); }));
+    await expect(markRead("http://hive", "s1", ["m1"])).resolves.toBeUndefined();
   });
 });

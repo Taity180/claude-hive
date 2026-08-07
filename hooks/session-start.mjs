@@ -3,7 +3,7 @@
 // Claude Hive session-start hook
 // Checks if the hive is running and injects behavioral instructions
 
-import { readEvent, hiveUrl, resolveSession } from "./lib/hive.mjs";
+import { readEvent, hiveUrl, resolveSession, reportClaudeSession } from "./lib/hive.mjs";
 
 const event = (await readEvent()) || {};
 const url = hiveUrl();
@@ -25,6 +25,12 @@ if (connected) {
   // from the working directory, which is what lets two Claude Code sessions
   // share a repo without stomping on each other's dashboard pill.
   const resolved = await resolveSession(event);
+
+  // Hand over Claude Code's session id so the hive can find this session's
+  // transcript and read its token usage.
+  if (resolved) {
+    await reportClaudeSession(url, resolved.id, event.session_id);
+  }
 
   // The hive's session list includes us once the MCP server has registered.
   let otherCount = 0;
@@ -99,13 +105,15 @@ if (connected) {
     "Example: hub_ask({ question: 'JWT or session cookies for auth?', options: ['JWT', 'Session cookies'] })",
     "",
     "### hub_get_messages - Check for instructions",
+    "",
+    "Messages the user types into the dashboard are also delivered to you automatically at the end of each turn, so you do not have to poll for them. Call this when you want them sooner:",
     "- Call at the start of every session",
     "- Call after completing each task before starting the next",
     "- Call when idle with nothing to do",
     "",
     "### hub_notify - MANDATORY for task completion and blocking events",
     "",
-    "You MUST call hub_notify at least once per user request — typically on task completion. The user may be on a different virtual desktop and rely on these desktop notifications to know you need them.",
+    "You MUST call hub_notify at least once per user request — typically on task completion. The user may be on a different virtual desktop; this posts to the session feed and flags the session unread so they see it when they look.",
     "",
     "Always call hub_notify for:",
     "- Task fully complete (every user request ends with one)",

@@ -261,6 +261,69 @@ export async function setStatus(url, sessionId, status, detail) {
   } catch {}
 }
 
+/**
+ * Tell the hive which Claude Code session a hive session belongs to.
+ *
+ * Claude Code names each transcript after its session id, and that transcript
+ * is where token usage lives — so this pairing is what lets the dashboard
+ * attribute usage to the right pill. Only a hook knows both halves.
+ * Never throws.
+ */
+export async function reportClaudeSession(url, sessionId, claudeSessionId) {
+  if (!claudeSessionId) return;
+  try {
+    await fetch(`${url}/api/sessions/${sessionId}/claude-session`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ claudeSessionId }),
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    });
+  } catch {}
+}
+
+/**
+ * Messages sent *to* this session that it hasn't consumed yet — replies typed
+ * into the dashboard and broadcasts from other sessions.
+ *
+ * A session's own progress messages are excluded: those came from Claude, and
+ * handing them back would be an echo chamber. Never throws.
+ */
+export async function pendingInbox(url, sessionId) {
+  try {
+    const resp = await fetch(`${url}/api/sessions/${sessionId}/messages/query`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ unreadOnly: true }),
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    });
+    if (!resp.ok) return [];
+    const messages = await resp.json();
+    if (!Array.isArray(messages)) return [];
+    return messages.filter((m) => m.from === "user" || m.from === "broadcast");
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Mark messages consumed.
+ *
+ * Load-bearing rather than housekeeping: without it the same message is
+ * pending forever, and anything that injects the inbox would re-inject it on
+ * every turn. Never throws.
+ */
+export async function markRead(url, sessionId, messageIds) {
+  if (!messageIds.length) return;
+  try {
+    await fetch(`${url}/api/sessions/${sessionId}/messages/read`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ messageIds }),
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    });
+  } catch {}
+}
+
 /** Unregister a session from the hive. Never throws. */
 export async function deleteSession(url, sessionId) {
   try {

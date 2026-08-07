@@ -3,32 +3,13 @@ import { useHubStore } from "../stores/hubStore";
 import { api } from "../api";
 import type { WsEvent } from "../types";
 
-async function showNotification(title: string, body: string) {
-  try {
-    const { isPermissionGranted, requestPermission, sendNotification } =
-      await import("@tauri-apps/plugin-notification");
-    let permitted = await isPermissionGranted();
-    if (!permitted) {
-      const permission = await requestPermission();
-      permitted = permission === "granted";
-    }
-    if (permitted) {
-      sendNotification({ title, body });
-    }
-  } catch {
-    if ("Notification" in window && Notification.permission === "granted") {
-      new Notification(title, { body });
-    } else if (
-      "Notification" in window &&
-      Notification.permission !== "denied"
-    ) {
-      const permission = await Notification.requestPermission();
-      if (permission === "granted") {
-        new Notification(title, { body });
-      }
-    }
-  }
-}
+// Native desktop notifications used to fire here on every status change,
+// question, and hub_notify call. They were removed: the hub is already
+// always-on-top and pinned across virtual desktops, and the tray badge counts
+// sessions needing attention — so a toast for the same event was a third
+// notification of something already visible in two places.
+//
+// The events themselves still flow; only the OS-level toast is gone.
 
 export function useWebSocket() {
   const wsRef = useRef<WebSocket | undefined>(undefined);
@@ -57,30 +38,6 @@ export function useWebSocket() {
       try {
         const wsEvent: WsEvent = JSON.parse(event.data);
         handleWsEvent(wsEvent);
-
-        if (wsEvent.type === "notification") {
-          showNotification(wsEvent.title, wsEvent.body);
-        } else if (wsEvent.type === "questionAsked") {
-          // A blocked session is the most urgent thing the hub can surface —
-          // notify regardless of which desktop the user is on.
-          const session = useHubStore
-            .getState()
-            .sessions.find((s) => s.id === wsEvent.question.sessionId);
-          showNotification(
-            session?.customName || session?.projectName || "Session",
-            wsEvent.question.question
-          );
-        } else if (
-          wsEvent.type === "statusChanged" &&
-          (wsEvent.status === "waiting_for_input" || wsEvent.status === "error")
-        ) {
-          const session = useHubStore
-            .getState()
-            .sessions.find((s) => s.id === wsEvent.sessionId);
-          const name = session?.projectName ?? "Session";
-          const detail = wsEvent.detail ?? wsEvent.status.replace(/_/g, " ");
-          showNotification(name, detail);
-        }
       } catch {
         // Ignore malformed messages
       }

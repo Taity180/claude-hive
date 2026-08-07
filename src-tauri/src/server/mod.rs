@@ -28,6 +28,38 @@ pub fn start_session_pruner(state: AppState) {
     });
 }
 
+/// Start a background task that folds new transcript writes into the usage
+/// totals every 30 seconds.
+///
+/// The interval is cheap because scanning is incremental: unchanged files cost
+/// one `stat` each, and a changed one is read from the byte offset where the
+/// last scan stopped — a few KB per turn, not the whole file.
+pub fn start_usage_scanner(state: AppState) {
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(std::time::Duration::from_secs(30));
+        loop {
+            interval.tick().await;
+            state.usage.scan().await;
+        }
+    });
+}
+
+/// Poll plan usage every 60 seconds.
+///
+/// Slower than the transcript scan because it is a network call against
+/// someone else's service, and the windows it reports move over hours rather
+/// than seconds. The token is re-read each time, so a rotated token or a
+/// different account is picked up without a restart.
+pub fn start_plan_usage_poller(state: AppState) {
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(std::time::Duration::from_secs(60));
+        loop {
+            interval.tick().await;
+            state.plan_usage.refresh().await;
+        }
+    });
+}
+
 pub fn create_router(state: AppState, static_dir: Option<std::path::PathBuf>) -> Router {
     use tower_http::services::ServeDir;
 
@@ -42,10 +74,14 @@ pub fn create_router(state: AppState, static_dir: Option<std::path::PathBuf>) ->
         .route("/api/sessions/{session_id}/messages", post(send_message))
         .route("/api/sessions/{session_id}/messages", get(get_all_messages))
         .route("/api/sessions/{session_id}/messages/clear", delete(clear_messages))
+        .route("/api/sessions/{session_id}/messages/read", post(mark_messages_read))
         .route("/api/sessions/{session_id}/messages/query", post(get_messages))
         .route("/api/sessions/{session_id}/messages/user", post(send_user_message))
         .route("/api/sessions/{session_id}/broadcast", post(broadcast_message))
         .route("/api/sessions/{session_id}/notify", post(notify))
+        .route("/api/usage", get(get_usage))
+        .route("/api/usage/plan", get(get_plan_usage))
+        .route("/api/sessions/{session_id}/claude-session", put(set_claude_session))
         .route("/api/questions", get(list_pending_questions))
         .route("/api/sessions/{session_id}/ask", post(ask_question))
         .route("/api/sessions/{session_id}/ask", get(get_question))

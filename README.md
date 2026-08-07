@@ -120,6 +120,27 @@ The tool call **blocks until you click**, so the session genuinely waits for you
 
 Single-select answers send on click. Multi-select accumulates and sends on **Send**.
 
+### Token Usage
+
+Reads Claude Code's own transcripts (`~/.claude/projects/**/*.jsonl`) to show where your tokens are going — no credentials, no cooperation from the model needed.
+
+- **Per session** — how full the context window is (`669.7k context · 67% of 1.0M`), tokens used, and an estimated cost
+- **Global** — today's tokens across *every* Claude Code session on the machine, split by input / output / cache read / cache write, plus a 7-day trend and today's top sessions
+
+Scanning is incremental: only transcripts touched in the last 36 hours are opened, and each is read from the byte offset where the previous scan stopped, so a 30-second refresh costs almost nothing even across thousands of files.
+
+Totals count **input + output**. Cache reads run ~300x that volume on a long session, so including them would say more about how much history is re-sent each turn than about how much work happened — the cache-inclusive figure is still there, one row down and in tooltips.
+
+### Plan Limits
+
+The title bar shows how much of your 5-hour window is spent and when it resets (`5h 42% · 2h 20m`); the breakdown adds the 7-day windows, per-model weekly limits, and extra credits.
+
+This is the only thing the hive can't read off disk — rate-limit windows are a subscription concept and live behind `GET /api/oauth/usage`. Authentication reuses the OAuth token Claude Code already stores in `~/.claude/.credentials.json`; there is no API key to create, and the token is re-read on every poll so a rotated token or a different account is picked up without a restart.
+
+The endpoint is **undocumented**, so every field is optional and any failure — no login, expired token, network, or a changed response shape — shows nothing or the last known value clearly marked, never a guessed percentage. An API-key login has no plan windows and the row simply doesn't appear.
+
+**What it can't show:** cost is an estimate at published rates, not a bill; subscription plans aren't charged per token at all. Models with no known context window or rates show their token counts without a percentage or price rather than a guessed one.
+
 ### Chat Messaging
 
 - **Session to Hub**: Claude reports progress, asks questions, flags errors

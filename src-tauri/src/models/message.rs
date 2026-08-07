@@ -57,6 +57,13 @@ fn default_true() -> bool {
     true
 }
 
+/// Messages the caller has consumed and no longer wants delivered.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MarkReadRequest {
+    pub message_ids: Vec<String>,
+}
+
 #[derive(Debug, Deserialize)]
 pub struct BroadcastRequest {
     pub message: String,
