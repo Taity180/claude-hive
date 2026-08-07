@@ -18,6 +18,7 @@ function sessionUsage(overrides: Partial<SessionUsage> = {}): SessionUsage {
     total: tokens({ input: 1_000, output: 2_000, cacheRead: 47_000 }),
     today: tokens({ input: 500, output: 1_000 }),
     estimatedCostUsd: 1.23,
+    estimatedCostWithCacheUsd: 157.4,
     lastActivity: "2026-01-01T00:00:00Z",
     ...overrides,
   };
@@ -233,6 +234,14 @@ describe("cost display", () => {
   it("shows an estimated cost when the model has known rates", () => {
     render(<SessionUsageBar usage={sessionUsage()} />);
     expect(screen.getByText("~$1.23")).toBeInTheDocument();
+  });
+
+  it("keeps the cache-inclusive cost reachable in the tooltip", () => {
+    render(<SessionUsageBar usage={sessionUsage()} />);
+    const title = screen.getByText("~$1.23").getAttribute("title") ?? "";
+    // Cache is genuinely billed; hiding it entirely would understate real cost.
+    // formatCost rounds to whole dollars above $100.
+    expect(title).toContain("$157 including cache");
   });
 
   it("omits cost entirely for an unpriced model", () => {

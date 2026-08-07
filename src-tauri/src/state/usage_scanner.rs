@@ -157,12 +157,13 @@ impl UsageScanner {
                 total: state.total,
                 today: today_usage,
                 estimated_cost_usd: None,
+                estimated_cost_with_cache_usd: None,
                 last_activity: state.last_activity,
             };
             usage.set_model(state.model.clone());
             // Today's cost is priced separately from the lifetime total.
             if let Some(model) = usage.model.as_deref() {
-                if let Some(cost) = today_usage.estimated_cost_usd(model) {
+                if let Some(cost) = today_usage.estimated_work_cost_usd(model) {
                     today_cost = Some(today_cost.unwrap_or(0.0) + cost);
                 }
             }

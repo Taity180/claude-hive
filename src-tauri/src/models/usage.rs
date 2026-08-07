@@ -34,6 +34,19 @@ impl TokenUsage {
         self.input + self.cache_read + self.cache_creation
     }
 
+    /// Cost of the input and output tokens alone, leaving cache traffic out.
+    ///
+    /// Cache is billed, so this is *not* the full API cost — see
+    /// `estimated_cost_usd` for that. It's the headline figure because cache
+    /// reads run ~300x the input+output volume and price at 0.1x, so including
+    /// them produces a number that tracks conversation length rather than work
+    /// and is mostly the caching discount doing its job.
+    pub fn estimated_work_cost_usd(&self, model: &str) -> Option<f64> {
+        let rates = model_rates(model)?;
+        const MTOK: f64 = 1_000_000.0;
+        Some(self.input as f64 / MTOK * rates.input + self.output as f64 / MTOK * rates.output)
+    }
+
     /// Rough dollar cost of these tokens at published API rates.
     ///
     /// An **estimate**, not a bill. On a subscription plan nothing is charged
@@ -142,9 +155,16 @@ pub struct SessionUsage {
     pub total: TokenUsage,
     /// This session's share of today, so the dashboard can rank who spent what.
     pub today: TokenUsage,
-    /// Estimated dollar cost of `total` at published rates, when the model has
-    /// known rates. Never a bill — see `TokenUsage::estimated_cost_usd`.
+    /// Estimated cost of the input and output tokens alone — the work done.
+    ///
+    /// Headlined over the cache-inclusive figure for the same reason the token
+    /// totals are: cache traffic scales with conversation length rather than
+    /// effort, and at 0.1x it produces a large number that is mostly the
+    /// caching discount working as intended.
     pub estimated_cost_usd: Option<f64>,
+    /// The same estimate with cache reads and writes priced in. Kept because
+    /// cache genuinely is billed — hiding it would understate real API cost.
+    pub estimated_cost_with_cache_usd: Option<f64>,
     pub last_activity: Option<DateTime<Utc>>,
 }
 
@@ -153,6 +173,9 @@ impl SessionUsage {
     pub fn set_model(&mut self, model: Option<String>) {
         self.context_limit = model.as_deref().and_then(context_limit);
         self.estimated_cost_usd = model
+            .as_deref()
+            .and_then(|m| self.total.estimated_work_cost_usd(m));
+        self.estimated_cost_with_cache_usd = model
             .as_deref()
             .and_then(|m| self.total.estimated_cost_usd(m));
         self.model = model;
@@ -254,6 +277,31 @@ mod tests {
         assert!((cost - 36.75).abs() < 1e-9, "got {}", cost);
     }
 
+
+    #[test]
+    fn work_cost_leaves_cache_out_while_the_full_estimate_keeps_it() {
+        // Cache is billed — reads at 0.1x input, 5-minute writes at 1.25x — so
+        // the two figures are both real, they just answer different questions.
+        let usage = TokenUsage {
+            input: 1_000_000,
+            output: 1_000_000,
+            cache_read: 1_000_000,
+            cache_creation: 1_000_000,
+        };
+
+        // 5 + 25, no cache.
+        assert_eq!(usage.estimated_work_cost_usd("claude-opus-5"), Some(30.0));
+        // 5 + 25 + 0.5 + 6.25.
+        let full = usage.estimated_cost_usd("claude-opus-5").unwrap();
+        assert!((full - 36.75).abs() < 1e-9, "got {}", full);
+    }
+
+    #[test]
+    fn work_cost_is_none_for_an_unpriced_model_too() {
+        let usage = TokenUsage { input: 1_000_000, ..Default::default() };
+        assert_eq!(usage.estimated_work_cost_usd("mystery-model"), None);
+    }
+
     #[test]
     fn cost_is_none_for_a_model_with_no_known_rates() {
         let usage = TokenUsage { input: 1_000_000, ..Default::default() };
@@ -279,11 +327,13 @@ mod tests {
             total: TokenUsage { output: 1_000_000, ..Default::default() },
             today: TokenUsage::default(),
             estimated_cost_usd: None,
+            estimated_cost_with_cache_usd: None,
             last_activity: None,
         };
 
         usage.set_model(Some("claude-opus-5".to_string()));
         assert_eq!(usage.estimated_cost_usd, Some(25.0));
+        assert_eq!(usage.estimated_cost_with_cache_usd, Some(25.0));
 
         usage.set_model(Some("mystery".to_string()));
         assert_eq!(usage.estimated_cost_usd, None);
@@ -326,6 +376,7 @@ mod tests {
             total: TokenUsage::default(),
             today: TokenUsage::default(),
             estimated_cost_usd: None,
+            estimated_cost_with_cache_usd: None,
             last_activity: None,
         };
 

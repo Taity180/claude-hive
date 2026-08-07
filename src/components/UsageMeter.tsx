@@ -75,7 +75,17 @@ export function SessionUsageBar({ usage }: { usage: SessionUsage }) {
           {formatTokens(workTokens(usage.total))} total
         </span>
         {formatCost(usage.estimatedCostUsd) && (
-          <span title="Estimated at published API rates — not a bill. Subscription plans are not charged per token.">
+          <span
+            title={[
+              "Input + output at published API rates — an estimate, not a bill.",
+              formatCost(usage.estimatedCostWithCacheUsd)
+                ? `${formatCost(usage.estimatedCostWithCacheUsd)} including cache (reads bill at 0.1x, writes at 1.25x).`
+                : null,
+              "Subscription plans are not charged per token at all.",
+            ]
+              .filter(Boolean)
+              .join(" ")}
+          >
             ~{formatCost(usage.estimatedCostUsd)}
           </span>
         )}

@@ -37,8 +37,10 @@ export interface SessionUsage {
   total: TokenUsage;
   /** This session's share of today. */
   today: TokenUsage;
-  /** Estimated cost of `total` at published rates — never a bill. */
+  /** Estimated cost of input + output at published rates — never a bill. */
   estimatedCostUsd: number | null;
+  /** The same with cache priced in (reads 0.1x, writes 1.25x). */
+  estimatedCostWithCacheUsd: number | null;
   lastActivity: string | null;
 }
 
