@@ -1,5 +1,6 @@
 import { useHubStore } from "../stores/hubStore";
 import { useRailStore } from "../stores/railStore";
+import { badgeCorner } from "./railBadge";
 import type { SessionStatus } from "../types";
 
 const statusColors: Record<SessionStatus, string> = {
@@ -26,6 +27,7 @@ export function RailNub({ onOpen }: { onOpen: () => void }) {
   const unread = useHubStore((s) => s.unreadSessions);
   const agentPosts = useHubStore((s) => s.agentPosts);
   const restingForm = useRailStore((s) => s.restingForm);
+  const anchor = useRailStore((s) => s.anchor);
 
   const present = STATUS_ORDER.filter((status) =>
     sessions.some((s) => s.status === status)
@@ -137,13 +139,15 @@ export function RailNub({ onOpen }: { onOpen: () => void }) {
             // status colours, and it clears on open rather than on state change.
             background: "#ff453a",
             color: "#fff",
-            top: isSliver ? -3 : -5,
-            right: isSliver ? -3 : -5,
-            minWidth: isSliver ? 9 : 15,
-            height: isSliver ? 9 : 15,
+            // Pinned inside the window, on the side facing the desktop. Hanging
+            // it outside the frame got it clipped by the OS on a 32px nub.
+            ...badgeCorner(anchor),
+            minWidth: isSliver ? 8 : 16,
+            height: isSliver ? 8 : 16,
             borderRadius: 999,
-            fontSize: 9.5,
-            padding: isSliver ? 0 : "0 4px",
+            fontSize: 10,
+            lineHeight: 1,
+            padding: isSliver ? 0 : "0 3px",
             boxShadow: "0 0 0 1.5px rgba(20,20,22,0.9)",
           }}
         >

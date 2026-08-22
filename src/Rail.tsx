@@ -9,6 +9,7 @@ import { RailPanel } from "./components/RailPanel";
 import { AgentsPane } from "./components/AgentsPane";
 import { RailChrome } from "./components/RailChrome";
 import { useAgentData } from "./hooks/useAgentData";
+import { useRailResize } from "./hooks/useRailResize";
 
 // Closed, the rail is a strip; open, it is the remembered size for this edge.
 const NUB_SIZE: Record<"nub" | "sliver", [number, number]> = {
@@ -20,6 +21,7 @@ export function Rail() {
   useTheme();
   useWebSocket();
   useAgentData();
+  useRailResize();
 
   const open = useRailStore((s) => s.open);
   const setOpen = useRailStore((s) => s.setOpen);

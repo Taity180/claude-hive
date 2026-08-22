@@ -12,7 +12,13 @@ export type AnchorId =
 
 export type RestingForm = "nub" | "sliver";
 
-export const RAIL_STORAGE_KEY = "claude-hive-rail";
+/**
+ * Versioned: the default edge offset changed from 8 to 14, and settings already
+ * on disk would have kept the old value forever — there is no settings UI yet
+ * to change it by hand. Bumping the key re-seeds preferences nobody has
+ * deliberately set.
+ */
+export const RAIL_STORAGE_KEY = "claude-hive-rail.v2";
 
 const HORIZONTAL: AnchorId[] = ["top", "bottom"];
 
@@ -31,7 +37,8 @@ interface Persisted {
 
 const DEFAULTS: Persisted = {
   anchor: "right",
-  offset: 8,
+  // Held clear of the monitor edge. 8px read as flush against the bezel.
+  offset: 14,
   restingForm: "nub",
   followCursor: true,
   sizes: {},

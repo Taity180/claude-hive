@@ -40,7 +40,7 @@ pub fn monitor_rects(app: &AppHandle) -> Result<Vec<MonitorRect>, String> {
 /// can never leave an invisible window parked at an OS default position.
 const DEFAULT_ANCHOR: Anchor = Anchor::Right;
 const DEFAULT_NUB: (u32, u32) = (32, 140);
-const DEFAULT_OFFSET: i32 = 8;
+const DEFAULT_OFFSET: i32 = 14;
 
 /// Build the rail window, hidden, during `setup()`.
 ///
