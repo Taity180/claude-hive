@@ -305,7 +305,10 @@ pub fn run() {
                     minimize_window,
                     hide_window,
                     start_dragging,
-                    update_tray_badge
+                    update_tray_badge,
+                    rail::window::open_rail,
+                    rail::window::close_rail,
+                    rail::window::place_rail
                 ])
                 .run(tauri::generate_context!())
                 .expect("error while running tauri application");
