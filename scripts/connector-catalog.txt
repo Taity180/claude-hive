@@ -1,0 +1,244 @@
+Catalog connectors (240)
+Already on your account: Atlassian, Cloudflare, Gmail, Google Calendar, Postman, Slack, Supabase
+Also connected (custom, not in catalog): Fireflies
+
+- 1inch
+- 1Password
+- academy-guide
+- Adobe Developer App Builder
+- Agent Compatibility
+- AgentMail
+- Aikido
+- Airtable
+- Airwallex AgentOS
+- Airwallex Developer
+- Aleph
+- Amazon Location Service
+- AMD
+- Amplemarket
+- Amplitude
+- Antimetal
+- Apify
+- Apollo.io
+- Appwrite
+- Arize
+- Asana
+- Ashby
+- Astronomer
+- Atlan
+- Atlassian [on]
+- Atlassian Forge
+- Atlassian Teamwork Graph
+- AtScale
+- Auth0
+- AWS Agents
+- AWS Amplify
+- AWS Core
+- AWS Data Analytics
+- AWS Databases
+- AWS Deployments
+- AWS SageMaker
+- AWS Serverless
+- Azure
+- Azure Cosmos DB
+- Box
+- Braintrust
+- Bright Data
+- Browser Use
+- Browserbase
+- Browserstack
+- Buildkite
+- Canva
+- Chainguard
+- Chargebee
+- ChatPRD
+- Checkmarx
+- Circle
+- Circleback
+- Cisco ThousandEyes
+- claude-api
+- claude-hive
+- claude-mem
+- Clay
+- Clerk
+- CLI for Agents
+- ClickHouse
+- ClickUp
+- Cloudflare [on]
+- Cloudinary
+- CockroachDB
+- CodeRabbit
+- Composio
+- Confidence by Spotify
+- Context.dev
+- Context7
+- Continual Learning
+- Convex
+- Coralogix
+- Corridor
+- Create Plugin
+- CrowdStrike
+- Cursor SDK
+- Cursor Team Kit
+- D&B Commercial Graph
+- D&B Risk Analytics
+- Dagster
+- Databricks
+- Datadog
+- DataRobot
+- dbt Labs
+- dev-base
+- dev-core
+- discernment-nudge
+- Docs Canvas
+- document-skills
+- Docusign
+- Dropbox
+- Dynatrace
+- Elastic
+- Encore
+- Endor Labs Agent Kit
+- eToro
+- Exa
+- example-skills
+- Falconer
+- Firebase
+- Firecrawl
+- Firetiger
+- Forge
+- GitBook
+- GitHits
+- GitHub
+- GitLab
+- Glean
+- Gmail [on]
+- Gong
+- Google Calendar [on]
+- Google Drive
+- Grafana Cloud
+- Grafana Labs
+- Granola
+- GSAP
+- Harness
+- here.now
+- Hex
+- HeyGen
+- Higgsfield
+- Hostinger
+- HubSpot
+- Hugging Face
+- IcePanel
+- Intercom
+- JFrog
+- Juicebox
+- Kraken
+- Langfuse
+- LaunchDarkly
+- Linear
+- Lovable
+- Lucid
+- Magic Patterns
+- MagicPath
+- Mainframe
+- Manufact
+- Mem0
+- Meta Reality Labs
+- Meticulous
+- Microsoft Dataverse
+- Mintlify
+- Miro
+- Mixpanel
+- Mobbin
+- Modern Web Guidance
+- Monday.com
+- MongoDB
+- MongoDB Atlas
+- Monk.io
+- Navan
+- Neon Postgres
+- Netlify
+- Notion
+- Nvidia Skills
+- Observe by Snowflake
+- Omni
+- OneSignal
+- OpenSearch
+- Opsera
+- Orchestrate
+- Outreach
+- Paper
+- ParadeDB
+- Parallel
+- Pendo
+- Phantom
+- Pinecone
+- Plain
+- PlanetScale
+- Playwright
+- Port
+- PostHog
+- Postman [on]
+- PR Review Canvas
+- Prisma
+- Profound
+- pstack
+- QuiverAI
+- Railway
+- Raisely
+- Ramp
+- React Doctor
+- Redis
+- Remotion
+- Render
+- Resend
+- Resolve AI
+- RevenueCat
+- RevenueCat Play Billing
+- Revolut X
+- Revyl
+- Roboflow
+- Runlayer
+- Salesforce
+- Sanity
+- Scandit
+- ScyllaDB
+- Semgrep
+- Sentry
+- shadcn/ui
+- Shopify
+- Sinch
+- Slack [on]
+- Snowflake
+- Snyk
+- Snyk API & Web
+- SonarQube
+- Sonatype
+- Sourcegraph
+- Stripe
+- Stripe Link
+- Subtext
+- Supabase [on]
+- Superpowers
+- Svelte
+- Tabnine
+- Tabnine Context Engine
+- Tavily
+- Temporal
+- Thermos
+- ThoughtSpot
+- TierZero
+- tldraw
+- turbopuffer
+- Twilio
+- ui-ux-pro-max
+- Vantage
+- Vercel
+- Webflow
+- Whop
+- Wix
+- WorkOS
+- X
+- Zapier
+- Zoom
+- ZoomInfo
+- Zscaler

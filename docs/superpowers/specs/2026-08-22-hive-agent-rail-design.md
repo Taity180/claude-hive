@@ -209,10 +209,10 @@ Two layers, fully offline, covering all 240 catalog entries.
 
 | Layer | Covers | Licence | Look |
 |---|---|---|---|
-| `simple-icons` npm, bundled | 95 | CC0 | Single-colour glyph in the official brand hex |
-| Generated monogram | 145 | ours | Two-letter tile, hue hashed from the name |
+| `simple-icons` npm, bundled | 94 | CC0 | Single-colour glyph in the official brand hex |
+| Generated monogram | 146 | ours | Two-letter tile, hue hashed from the name |
 
-Measured, not estimated: `simple-icons` v16 ships 3,453 marks, and only 95 of the 240 match. This is not a
+Measured, not estimated: `simple-icons` v16 ships 3,453 marks, and only 94 of the 240 match. This is not a
 naming problem — Slack, Canva, Playwright, Salesforce, Twilio, Amplitude, Pinecone, Semgrep and Exa are all
 genuinely absent, because the project removes logos whose brand guidelines forbid redistribution.
 
