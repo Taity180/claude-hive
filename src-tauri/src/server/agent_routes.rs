@@ -163,6 +163,30 @@ pub async fn set_agent_enabled(
 }
 
 #[derive(Debug, Serialize)]
+pub struct PendingReplies {
+    pub pending: usize,
+}
+
+/// Extracted so the count is testable without spinning up a router.
+async fn pending_count(state: &AppState, agent_id: &str) -> usize {
+    state.agent_feed.pending_reply_count(agent_id).await
+}
+
+/// How many replies are still waiting for an agent to collect.
+///
+/// The composer shows this: MCP cannot push, so a reply sits here until the
+/// agent calls `agent_inbox`, and an honest "queued" indicator beats a send
+/// button that pretends to be instant.
+pub async fn agent_pending_replies(
+    State(state): State<AppState>,
+    Path(agent_id): Path<String>,
+) -> Json<PendingReplies> {
+    Json(PendingReplies {
+        pending: pending_count(&state, &agent_id).await,
+    })
+}
+
+#[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ConnectionInfo {
     pub endpoint: String,
@@ -223,6 +247,21 @@ mod tests {
         let mut empty = HeaderMap::new();
         empty.insert("authorization", HeaderValue::from_static("Bearer   "));
         assert_eq!(bearer_token(&empty), None, "whitespace is not a token");
+    }
+
+    #[tokio::test]
+    async fn pending_count_reports_what_is_queued() {
+        let dir = tempfile::tempdir().unwrap();
+        let state = crate::server::app_state::AppState::with_token_dir(dir.path());
+        state.agents.upsert("a1", "Grok".into(), None).await;
+
+        assert_eq!(pending_count(&state, "a1").await, 0);
+        state.agent_feed.enqueue_reply("a1", "one".into()).await;
+        state.agent_feed.enqueue_reply("a1", "two".into()).await;
+        assert_eq!(pending_count(&state, "a1").await, 2);
+
+        state.agent_feed.drain_replies("a1").await;
+        assert_eq!(pending_count(&state, "a1").await, 0, "a drained queue reads as zero");
     }
 
     #[test]

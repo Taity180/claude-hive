@@ -95,6 +95,7 @@ pub fn create_router(state: AppState, static_dir: Option<std::path::PathBuf>) ->
         .route("/api/agents/connection", get(agent_connection_info))
         .route("/api/agents/{agent_id}/reply", post(reply_to_agent))
         .route("/api/agents/{agent_id}/enabled", put(set_agent_enabled))
+        .route("/api/agents/{agent_id}/pending", get(agent_pending_replies))
         .route("/ws", get(websocket::ws_handler))
         .layer(CorsLayer::permissive())
         .with_state(state);
