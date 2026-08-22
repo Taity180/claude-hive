@@ -24,13 +24,24 @@ const STATUS_ORDER: SessionStatus[] = [
 export function RailNub({ onOpen }: { onOpen: () => void }) {
   const sessions = useHubStore((s) => s.sessions);
   const unread = useHubStore((s) => s.unreadSessions);
+  const agentPosts = useHubStore((s) => s.agentPosts);
   const restingForm = useRailStore((s) => s.restingForm);
 
   const present = STATUS_ORDER.filter((status) =>
     sessions.some((s) => s.status === status)
   );
-  const unreadCount = unread.size;
+
+  // Unread counts both halves of the feed. Counting only sessions left the nub
+  // completely blank while agents were posting, which reads as broken.
+  const unreadPosts = agentPosts.filter((p) => !p.read).length;
+  const unreadCount = unread.size + unreadPosts;
+
+  const hasAgentActivity = agentPosts.length > 0;
+  // Nothing connected and nothing posted: show the mark rather than an empty
+  // bar, so a resting rail still looks like a thing that works.
+  const isIdle = present.length === 0 && !hasAgentActivity;
   const isSliver = restingForm === "sliver";
+  const dotSize = isSliver ? 5 : 7;
 
   return (
     <button
@@ -49,6 +60,25 @@ export function RailNub({ onOpen }: { onOpen: () => void }) {
         cursor: "pointer",
       }}
     >
+      {isIdle && (
+        <svg
+          data-testid="rail-idle-mark"
+          width={isSliver ? 10 : 16}
+          height={isSliver ? 10 : 16}
+          viewBox="0 0 512 512"
+          aria-hidden="true"
+          style={{ opacity: 0.55 }}
+        >
+          <circle cx="256" cy="256" r="60" fill="var(--hub-accent, #60a5fa)" />
+          <circle cx="256" cy="96" r="34" fill="var(--hub-text-muted, #777)" />
+          <circle cx="394" cy="176" r="34" fill="var(--hub-text-muted, #777)" />
+          <circle cx="394" cy="336" r="34" fill="var(--hub-text-muted, #777)" />
+          <circle cx="256" cy="416" r="34" fill="var(--hub-text-muted, #777)" />
+          <circle cx="118" cy="336" r="34" fill="var(--hub-text-muted, #777)" />
+          <circle cx="118" cy="176" r="34" fill="var(--hub-text-muted, #777)" />
+        </svg>
+      )}
+
       {present.map((status) => (
         <span
           key={status}
@@ -58,8 +88,8 @@ export function RailNub({ onOpen }: { onOpen: () => void }) {
           }`}
           style={{
             background: statusColors[status],
-            width: isSliver ? 5 : 7,
-            height: isSliver ? 5 : 7,
+            width: dotSize,
+            height: dotSize,
           }}
         />
       ))}
@@ -70,6 +100,31 @@ export function RailNub({ onOpen }: { onOpen: () => void }) {
           style={{ fontSize: 9.5, color: "var(--hub-text-muted)" }}
         >
           {sessions.length}
+        </span>
+      )}
+
+      {/* Agents are monochrome everywhere, including here. */}
+      {hasAgentActivity && (
+        <span
+          data-testid="agent-marker"
+          className="shrink-0 grid place-items-center rounded"
+          style={{
+            width: isSliver ? 8 : 14,
+            height: isSliver ? 8 : 14,
+            background: "#f2f4f8",
+          }}
+        >
+          {!isSliver && (
+            <svg width="9" height="9" viewBox="0 0 24 24" aria-hidden="true">
+              <path
+                d="M12 3l9 16H3z"
+                fill="none"
+                stroke="#16181c"
+                strokeWidth="2.6"
+                strokeLinejoin="round"
+              />
+            </svg>
+          )}
         </span>
       )}
 

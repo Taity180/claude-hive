@@ -79,3 +79,30 @@ body,
 .scrollbar-none::-webkit-scrollbar {
   display: none;
 }
+
+/* The rail panel grows from the screen edge it is anchored to, so opening reads
+   as a panel sliding out rather than a window appearing. The OS window resize
+   is instant; this animates the content inside it, which is what the eye
+   actually tracks. */
+@keyframes rail-slide-from-right {
+  from { opacity: 0; transform: translateX(14px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes rail-slide-from-left {
+  from { opacity: 0; transform: translateX(-14px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+.rail-slide-in[data-anchor-side="right"] {
+  animation: rail-slide-from-right 180ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+.rail-slide-in[data-anchor-side="left"] {
+  animation: rail-slide-from-left 180ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rail-slide-in[data-anchor-side="right"],
+  .rail-slide-in[data-anchor-side="left"] {
+    animation: none;
+  }
+}

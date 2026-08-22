@@ -14,7 +14,7 @@ const sessions = [
 
 describe("RailNub", () => {
   beforeEach(() => {
-    useHubStore.setState({ sessions, unreadSessions: new Set(["a", "b"]) });
+    useHubStore.setState({ sessions, unreadSessions: new Set(["a", "b"]), agentPosts: [] });
     useRailStore.setState({ restingForm: "nub" });
   });
 
@@ -55,5 +55,65 @@ describe("RailNub", () => {
     render(<RailNub onOpen={onOpen} />);
     await userEvent.click(screen.getByTestId("rail-nub"));
     expect(onOpen).toHaveBeenCalledOnce();
+  });
+
+  it("shows the hive mark when there is nothing else to show", () => {
+    // A resting rail with no sessions and no agent activity used to render as a
+    // blank black bar, which reads as broken rather than as idle.
+    useHubStore.setState({ sessions: [], unreadSessions: new Set(), agentPosts: [] });
+    render(<RailNub onOpen={vi.fn()} />);
+    expect(screen.getByTestId("rail-idle-mark")).toBeInTheDocument();
+    expect(screen.queryByTestId("status-dot")).toBeNull();
+  });
+
+  it("counts unread agent posts on the badge, not just sessions", () => {
+    // The nub only knew about Claude sessions, so four unread agent posts left
+    // it completely blank.
+    useHubStore.setState({
+      sessions: [],
+      unreadSessions: new Set(),
+      agentPosts: [
+        { id: "p1", agentId: "a", agentName: "Grok", appId: null, content: "x", postType: "info", timestamp: "", read: false },
+        { id: "p2", agentId: "a", agentName: "Grok", appId: null, content: "y", postType: "info", timestamp: "", read: false },
+      ],
+    });
+    render(<RailNub onOpen={vi.fn()} />);
+    expect(screen.getByTestId("unread-badge")).toHaveTextContent("2");
+  });
+
+  it("adds unread sessions and unread posts together", () => {
+    useHubStore.setState({
+      sessions,
+      unreadSessions: new Set(["a"]),
+      agentPosts: [
+        { id: "p1", agentId: "a", agentName: "Grok", appId: null, content: "x", postType: "info", timestamp: "", read: false },
+      ],
+    });
+    render(<RailNub onOpen={vi.fn()} />);
+    expect(screen.getByTestId("unread-badge")).toHaveTextContent("2");
+  });
+
+  it("ignores posts already marked read", () => {
+    useHubStore.setState({
+      sessions: [],
+      unreadSessions: new Set(),
+      agentPosts: [
+        { id: "p1", agentId: "a", agentName: "Grok", appId: null, content: "x", postType: "info", timestamp: "", read: true },
+      ],
+    });
+    render(<RailNub onOpen={vi.fn()} />);
+    expect(screen.queryByTestId("unread-badge")).toBeNull();
+  });
+
+  it("shows an agent marker when agents have posted", () => {
+    useHubStore.setState({
+      sessions: [],
+      unreadSessions: new Set(),
+      agentPosts: [
+        { id: "p1", agentId: "a", agentName: "Grok", appId: null, content: "x", postType: "info", timestamp: "", read: true },
+      ],
+    });
+    render(<RailNub onOpen={vi.fn()} />);
+    expect(screen.getByTestId("agent-marker")).toBeInTheDocument();
   });
 });

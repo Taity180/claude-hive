@@ -7,6 +7,7 @@ import { useRailStore } from "./stores/railStore";
 import { RailNub } from "./components/RailNub";
 import { RailPanel } from "./components/RailPanel";
 import { AgentsPane } from "./components/AgentsPane";
+import { RailChrome } from "./components/RailChrome";
 import { useAgentData } from "./hooks/useAgentData";
 
 // Closed, the rail is a strip; open, it is the remembered size for this edge.
@@ -33,6 +34,8 @@ export function Rail() {
   // before it is on screen. Rust tells us when that changes; without it the
   // cursor-follow poll below would run all day against a hidden window.
   const [pane, setPane] = useState<"feed" | "agents">("feed");
+  // Which edge the panel grows from, so the slide-in runs the right way.
+  const anchorSide = anchor === "left" || anchor === "tl" || anchor === "bl" ? "left" : "right";
   const [onScreen, setOnScreen] = useState(false);
   useEffect(() => {
     const stop = listen<boolean>("rail-visibility", (e) => setOnScreen(e.payload));
@@ -90,7 +93,7 @@ export function Rail() {
       data-testid="rail-root"
     >
       {open ? (
-        <div className="flex flex-col h-full">
+        <div className="flex flex-col h-full rail-slide-in" data-anchor-side={anchorSide}>
           <div
             className="flex items-center gap-1 px-2 pt-2 shrink-0"
             role="group"
@@ -115,6 +118,8 @@ export function Rail() {
                 {id === "feed" ? "Activity" : "Agents"}
               </button>
             ))}
+            <span className="flex-1" />
+            <RailChrome onCollapse={() => setOpen(false)} />
           </div>
           {pane === "feed" ? <RailPanel /> : <AgentsPane />}
         </div>
