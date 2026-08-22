@@ -151,7 +151,9 @@ export type WsEvent =
     }
   | { type: "agentConnected"; agent: Agent }
   | { type: "agentAppsChanged"; agentId: string; apps: AgentApp[] }
-  | { type: "agentPosted"; post: AgentPost };
+  | { type: "agentPosted"; post: AgentPost }
+  | { type: "taskUpserted"; task: Task }
+  | { type: "taskRemoved"; taskId: string };
 
 export type ViewState = "collapsed" | "expanded" | "session-detail" | "settings";
 export type SessionViewMode = "grid" | "list" | "detailed";
@@ -203,4 +205,35 @@ export interface ConnectionInfo {
   endpoint: string;
   token: string | null;
   promptBlock: string;
+}
+
+// ── Tasks ──────────────────────────────────────────────────────────────
+// Mirrors src-tauri/src/models/task.rs.
+
+export type Actor = { kind: "user" } | { kind: "agent"; id: string; name: string };
+
+export interface TaskNote {
+  id: string;
+  author: Actor;
+  body: string;
+  createdAt: string;
+}
+
+export interface Task {
+  id: string;
+  /** Stable key from the pushing agent; the server dedupes on it. */
+  externalId: string | null;
+  /** Null for a task the user typed. */
+  agentId: string | null;
+  title: string;
+  appId: string | null;
+  sourceLabel: string | null;
+  /** Genuinely optional — an undated task is a real state, not a missing one. */
+  due: string | null;
+  done: boolean;
+  completedBy: Actor | null;
+  completedAt: string | null;
+  notes: TaskNote[];
+  createdAt: string;
+  updatedAt: string;
 }

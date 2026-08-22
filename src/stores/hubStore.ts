@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { Agent, AgentAppRow, AgentPost, Session, Message, PlanUsageSnapshot, Question, UsageSnapshot, ViewState, WsEvent } from "../types";
+import type { Agent, AgentAppRow, AgentPost, Task, Session, Message, PlanUsageSnapshot, Question, UsageSnapshot, ViewState, WsEvent } from "../types";
 
 // Minimum sensible height for the expanded dashboard. Guards against a bad
 // value being persisted (e.g. someone resized the window to almost nothing
@@ -38,6 +38,8 @@ interface HubState {
   agentApps: AgentAppRow[];
   /** Newest first. */
   agentPosts: AgentPost[];
+  /** Tasks, persisted server-side; agents push them and the user ticks them. */
+  tasks: Task[];
 
   setViewState: (view: ViewState) => void;
   setActiveSession: (sessionId: string | null) => void;
@@ -56,6 +58,7 @@ interface HubState {
   setAgents: (agents: Agent[]) => void;
   setAgentApps: (apps: AgentAppRow[]) => void;
   setAgentPosts: (posts: AgentPost[]) => void;
+  setTasks: (tasks: Task[]) => void;
 }
 
 /** Drop one session's question from the map. */
@@ -81,6 +84,7 @@ export const useHubStore = create<HubState>((set) => ({
   agents: [],
   agentApps: [],
   agentPosts: [],
+  tasks: [],
   expandedHeight: DEFAULT_EXPANDED_HEIGHT,
 
   setViewState: (viewState) =>
@@ -147,6 +151,7 @@ export const useHubStore = create<HubState>((set) => ({
   setAgents: (agents) => set({ agents }),
   setAgentApps: (agentApps) => set({ agentApps }),
   setAgentPosts: (agentPosts) => set({ agentPosts }),
+  setTasks: (tasks) => set({ tasks }),
 
   handleWsEvent: (event) =>
     set((state) => {
@@ -229,6 +234,19 @@ export const useHubStore = create<HubState>((set) => ({
               : new Set([...state.unreadSessions, question.sessionId]),
           };
         }
+
+        case "taskUpserted": {
+          // Mirrors the server's upsert: replace by id, never append a second.
+          const known = state.tasks.some((t) => t.id === event.task.id);
+          return {
+            tasks: known
+              ? state.tasks.map((t) => (t.id === event.task.id ? event.task : t))
+              : [...state.tasks, event.task],
+          };
+        }
+
+        case "taskRemoved":
+          return { tasks: state.tasks.filter((t) => t.id !== event.taskId) };
 
         case "agentConnected": {
           const known = state.agents.some((a) => a.id === event.agent.id);

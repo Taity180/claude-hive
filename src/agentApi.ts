@@ -1,5 +1,5 @@
 import { api } from "./api";
-import type { Agent, AgentAppRow, AgentPost, ConnectionInfo } from "./types";
+import type { Agent, AgentAppRow, AgentPost, ConnectionInfo, Task } from "./types";
 
 /**
  * Read a JSON endpoint, falling back rather than throwing.
@@ -65,4 +65,24 @@ export function replyToAgent(agentId: string, message: string): Promise<boolean>
 
 export function setAgentEnabled(agentId: string, enabled: boolean): Promise<boolean> {
   return send(`/api/agents/${agentId}/enabled`, "PUT", { enabled });
+}
+
+export function fetchTasks(): Promise<Task[]> {
+  return getJson<Task[]>("/api/tasks", []);
+}
+
+export function createTask(title: string, due?: string): Promise<boolean> {
+  return send("/api/tasks", "POST", { title, due: due ?? null });
+}
+
+export function setTaskDone(id: string, done: boolean): Promise<boolean> {
+  return send(`/api/tasks/${id}/done`, "PUT", { done });
+}
+
+export function addTaskNote(id: string, body: string): Promise<boolean> {
+  return send(`/api/tasks/${id}/notes`, "POST", { body });
+}
+
+export function deleteTask(id: string): Promise<boolean> {
+  return send(`/api/tasks/${id}`, "DELETE", {});
 }
