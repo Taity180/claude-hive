@@ -29,16 +29,21 @@ describe("SessionPill", () => {
     expect(wrapper.style.border).not.toContain("#ef4444");
   });
 
-  it("tints only a session waiting for input", () => {
-    const { container: waiting } = render(
-      <SessionPill session={session({ status: "waiting_for_input" })} onClick={vi.fn()} />
+  // "Needs attention" is waiting-or-error throughout the app — the CollapsedBar
+  // filter and the tray badge count both use that definition, so the tint has
+  // to as well, or a failed build stops standing out.
+  it.each(["waiting_for_input", "error"] as const)("tints a %s session", (status) => {
+    const { container } = render(
+      <SessionPill session={session({ status })} onClick={vi.fn()} />
     );
-    expect(waiting.firstElementChild).toHaveAttribute("data-attention", "true");
+    expect(container.firstElementChild).toHaveAttribute("data-attention", "true");
+  });
 
-    const { container: running } = render(
-      <SessionPill session={session({ status: "running" })} onClick={vi.fn()} />
+  it.each(["running", "thinking", "idle"] as const)("leaves a %s session untinted", (status) => {
+    const { container } = render(
+      <SessionPill session={session({ status })} onClick={vi.fn()} />
     );
-    expect(running.firstElementChild).not.toHaveAttribute("data-attention");
+    expect(container.firstElementChild).not.toHaveAttribute("data-attention");
   });
 
   it("no longer applies the pulsing border animation class", () => {

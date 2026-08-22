@@ -47,16 +47,6 @@ body,
   background: rgba(255, 255, 255, 0.25);
 }
 
-/* Pulsing status border glow for session items */
-@keyframes status-pulse {
-  0%, 100% { border-color: var(--pulse-color); box-shadow: 0 0 3px 0 var(--pulse-color); }
-  50% { border-color: var(--pulse-color-dim); box-shadow: 0 0 1px 0 var(--pulse-color-dim); }
-}
-
-.status-border-pulse {
-  animation: status-pulse 2.5s ease-in-out infinite;
-}
-
 /* Hide scrollbar completely on collapsed pill row */
 .scrollbar-none {
   scrollbar-width: none;

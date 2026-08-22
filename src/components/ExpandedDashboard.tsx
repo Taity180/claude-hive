@@ -57,19 +57,19 @@ function ListView({ sessions }: { sessions: Session[] }) {
     <div className="p-1 space-y-0.5">
       {sessions.map((session) => {
         const hasUnread = unreadSessions.has(session.id);
-        const borderColor = statusColors[session.status];
-        const borderDim = `${statusColors[session.status]}44`;
+        const needsAttention =
+          session.status === "waiting_for_input" || session.status === "error";
         return (
           <button
             key={session.id}
+            data-session-row
+            data-attention={needsAttention ? "true" : undefined}
             onClick={() => setActiveSession(session.id)}
-            className="group flex items-center gap-2 w-full text-left px-2.5 py-1.5 rounded-md transition-colors hover:brightness-125 status-border-pulse"
+            className="group flex items-center gap-2 w-full text-left px-2.5 py-1.5 rounded-md transition-colors hover:brightness-125"
             style={{
-              background: "transparent",
-              border: `1px solid ${borderColor}`,
-              "--pulse-color": borderColor,
-              "--pulse-color-dim": borderDim,
-            } as React.CSSProperties}
+              background: needsAttention ? "var(--hub-attention)" : "transparent",
+              border: "1px solid var(--hub-hair, rgba(255,255,255,0.09))",
+            }}
           >
             <span
               className={`w-2 h-2 rounded-full shrink-0 ${session.status === "waiting_for_input" ? "animate-pulse" : ""}`}
@@ -141,21 +141,16 @@ function DetailedRow({ session }: { session: Session }) {
   const lastMessage = messages?.[messages.length - 1];
   const isAttention =
     session.status === "waiting_for_input" || session.status === "error";
-  const borderColor = statusColors[session.status];
-  const borderDim = `${statusColors[session.status]}44`;
-
   return (
     <button
+      data-session-row
+      data-attention={isAttention ? "true" : undefined}
       onClick={() => setActiveSession(session.id)}
-      className="group flex items-start gap-2.5 rounded-lg px-3 py-2.5 w-full text-left transition-colors status-border-pulse"
+      className="group flex items-start gap-2.5 rounded-lg px-3 py-2.5 w-full text-left transition-colors"
       style={{
-        background: isAttention
-          ? "rgba(234, 179, 8, 0.08)"
-          : "var(--hub-surface)",
-        border: `1px solid ${borderColor}`,
-        "--pulse-color": borderColor,
-        "--pulse-color-dim": borderDim,
-      } as React.CSSProperties}
+        background: isAttention ? "var(--hub-attention)" : "var(--hub-surface)",
+        border: "1px solid var(--hub-hair, rgba(255,255,255,0.09))",
+      }}
     >
       <span
         className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${
