@@ -6,6 +6,8 @@ import { useWebSocket } from "./hooks/useWebSocket";
 import { useRailStore } from "./stores/railStore";
 import { RailNub } from "./components/RailNub";
 import { RailPanel } from "./components/RailPanel";
+import { AgentsPane } from "./components/AgentsPane";
+import { useAgentData } from "./hooks/useAgentData";
 
 // Closed, the rail is a strip; open, it is the remembered size for this edge.
 const NUB_SIZE: Record<"nub" | "sliver", [number, number]> = {
@@ -16,6 +18,7 @@ const NUB_SIZE: Record<"nub" | "sliver", [number, number]> = {
 export function Rail() {
   useTheme();
   useWebSocket();
+  useAgentData();
 
   const open = useRailStore((s) => s.open);
   const setOpen = useRailStore((s) => s.setOpen);
@@ -29,6 +32,7 @@ export function Rail() {
   // The rail window is created hidden at startup, so this component mounts long
   // before it is on screen. Rust tells us when that changes; without it the
   // cursor-follow poll below would run all day against a hidden window.
+  const [pane, setPane] = useState<"feed" | "agents">("feed");
   const [onScreen, setOnScreen] = useState(false);
   useEffect(() => {
     const stop = listen<boolean>("rail-visibility", (e) => setOnScreen(e.payload));
@@ -85,7 +89,38 @@ export function Rail() {
       style={{ background: "var(--hub-bg-solid, #141414)" }}
       data-testid="rail-root"
     >
-      {open ? <RailPanel /> : <RailNub onOpen={() => setOpen(true)} />}
+      {open ? (
+        <div className="flex flex-col h-full">
+          <div
+            className="flex items-center gap-1 px-2 pt-2 shrink-0"
+            role="group"
+            aria-label="Rail pane"
+          >
+            {(["feed", "agents"] as const).map((id) => (
+              <button
+                key={id}
+                type="button"
+                data-testid={`pane-${id}`}
+                aria-pressed={pane === id}
+                onClick={() => setPane(id)}
+                className="text-[11px] rounded-md px-2 py-0.5"
+                style={{
+                  border: 0,
+                  cursor: "pointer",
+                  fontWeight: pane === id ? 600 : 500,
+                  background: pane === id ? "var(--hub-surface)" : "transparent",
+                  color: pane === id ? "var(--hub-text)" : "var(--hub-text-muted)",
+                }}
+              >
+                {id === "feed" ? "Activity" : "Agents"}
+              </button>
+            ))}
+          </div>
+          {pane === "feed" ? <RailPanel /> : <AgentsPane />}
+        </div>
+      ) : (
+        <RailNub onOpen={() => setOpen(true)} />
+      )}
     </div>
   );
 }

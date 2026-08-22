@@ -4,6 +4,7 @@ import { buildFeed } from "../feed/buildFeed";
 import { AgentPostRow } from "./AgentPostRow";
 import { ConnectedAppsBar } from "./ConnectedAppsBar";
 import { InlineRename } from "./InlineRename";
+import { RailComposer } from "./RailComposer";
 import type { Session, SessionStatus } from "../types";
 
 const statusColors: Record<SessionStatus, string> = {
@@ -90,6 +91,7 @@ function SessionRow({ session }: { session: Session }) {
 export function RailPanel() {
   const sessions = useHubStore((s) => s.sessions);
   const agentPosts = useHubStore((s) => s.agentPosts);
+  const agents = useHubStore((s) => s.agents);
   const [selectedApp, setSelectedApp] = useState<string | null>(null);
 
   // Ordering lives in buildFeed so it can be tested without rendering.
@@ -130,6 +132,8 @@ export function RailPanel() {
           )
         )}
       </div>
+
+      <RailComposer agents={agents} />
     </div>
   );
 }
