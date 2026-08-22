@@ -1,7 +1,13 @@
 import React, { Component, type ReactNode } from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
+import { Rail } from "./Rail";
+import { currentWindowLabel } from "./windowLabel";
 import "./index.css";
+
+// Hive and the Rail are two Tauri windows served from this one bundle, so the
+// label decides which root mounts.
+const Root = currentWindowLabel() === "rail" ? Rail : App;
 
 class ErrorBoundary extends Component<
   { children: ReactNode },
@@ -40,7 +46,7 @@ class ErrorBoundary extends Component<
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
     <ErrorBoundary>
-      <App />
+      <Root />
     </ErrorBoundary>
   </React.StrictMode>,
 );
