@@ -1,15 +1,40 @@
 @import "tailwindcss";
 
 :root {
+  /* Native UI face first — Segoe UI Variable on Windows, SF on macOS. Inter
+     led this stack before, which read as a web app rather than a desktop one. */
   font-family:
-    Inter,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI Variable Text",
+    "Segoe UI",
     system-ui,
-    Avenir,
-    Helvetica,
-    Arial,
     sans-serif;
   line-height: 1.5;
   font-weight: 400;
+  letter-spacing: -0.005em;
+}
+
+/* The AppKit edge vocabulary: a lit top edge and a faint inner ring, nothing
+   on the other three sides. Applied to window roots. */
+.hub-material {
+  box-shadow:
+    inset 0 1px 0 var(--hub-spec, rgba(255, 255, 255, 0.16)),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.045);
+}
+
+/* Hairline divider inset from the left, the way a native list draws it. */
+.hub-hairline {
+  position: relative;
+}
+.hub-hairline::before {
+  content: "";
+  position: absolute;
+  left: 11px;
+  right: 0;
+  top: 0;
+  height: 1px;
+  background: var(--hub-hair, rgba(255, 255, 255, 0.09));
 }
 
 html,

@@ -21,3 +21,11 @@ describe("theme tokens", () => {
     expect(defaultTheme.accent).toBe("#60a5fa");
   });
 });
+
+describe("vibrancy", () => {
+  it("saturates as well as blurs, so colour behind the glass survives", () => {
+    for (const theme of themes) {
+      expect(theme.blur, `${theme.id} blur`).toMatch(/blur\(\d+px\)\s+saturate\(\d+%\)/);
+    }
+  });
+});

@@ -86,7 +86,7 @@ function WindowBar({ barRef, captureExpandedHeight }: WindowBarProps) {
       className="flex items-center gap-2 px-3 py-1.5 shrink-0 select-none cursor-grab active:cursor-grabbing"
       style={{
         background: "var(--hub-bg-solid, #111)",
-        borderBottom: "1px solid var(--hub-border, #333)",
+        borderBottom: "1px solid var(--hub-hair, rgba(255,255,255,0.09))",
       }}
     >
       {/* App icon */}
@@ -288,7 +288,10 @@ function App() {
   }, [viewState, expandedHeight]);
 
   return (
-    <div className="h-screen w-screen overflow-hidden flex flex-col" style={{ background: "var(--hub-bg-solid, #141414)" }}>
+    <div
+      className="h-screen w-screen overflow-hidden flex flex-col hub-material"
+      style={{ background: "var(--hub-bg-solid, #141414)" }}
+    >
       <WindowBar barRef={windowBarRef} captureExpandedHeight={captureExpandedHeight} />
       <div className="flex-1 overflow-auto p-1">
         {viewState === "collapsed" && <CollapsedBar ref={collapsedContentRef} />}
