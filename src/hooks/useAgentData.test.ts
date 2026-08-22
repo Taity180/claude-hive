@@ -1,12 +1,18 @@
 import { renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { fetchAgents, fetchAgentApps, fetchAgentPosts } = vi.hoisted(() => ({
+const { fetchAgents, fetchAgentApps, fetchAgentPosts, fetchTasks } = vi.hoisted(() => ({
   fetchAgents: vi.fn(),
   fetchAgentApps: vi.fn(),
   fetchAgentPosts: vi.fn(),
+  fetchTasks: vi.fn(),
 }));
-vi.mock("../agentApi", () => ({ fetchAgents, fetchAgentApps, fetchAgentPosts }));
+vi.mock("../agentApi", () => ({
+  fetchAgents,
+  fetchAgentApps,
+  fetchAgentPosts,
+  fetchTasks,
+}));
 
 import { useAgentData } from "./useAgentData";
 import { useHubStore } from "../stores/hubStore";
@@ -20,7 +26,8 @@ describe("useAgentData", () => {
       { agentId: "a1", agentName: "Grok", id: "gmail", label: "Gmail", health: "ok" },
     ]);
     fetchAgentPosts.mockReset().mockResolvedValue([]);
-    useHubStore.setState({ agents: [], agentApps: [], agentPosts: [] });
+    fetchTasks.mockReset().mockResolvedValue([]);
+    useHubStore.setState({ agents: [], agentApps: [], agentPosts: [], tasks: [] });
   });
 
   it("loads agents, apps and posts into the store", async () => {
@@ -28,6 +35,7 @@ describe("useAgentData", () => {
     await waitFor(() => expect(useHubStore.getState().agents).toHaveLength(1));
     expect(useHubStore.getState().agentApps).toHaveLength(1);
     expect(fetchAgentPosts).toHaveBeenCalled();
+    expect(fetchTasks).toHaveBeenCalled();
   });
 
   it("fetches once, not on every render", async () => {

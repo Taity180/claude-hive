@@ -26,6 +26,7 @@ export function RailNub({ onOpen }: { onOpen: () => void }) {
   const sessions = useHubStore((s) => s.sessions);
   const unread = useHubStore((s) => s.unreadSessions);
   const agentPosts = useHubStore((s) => s.agentPosts);
+  const tasks = useHubStore((s) => s.tasks);
   const restingForm = useRailStore((s) => s.restingForm);
   const anchor = useRailStore((s) => s.anchor);
 
@@ -39,9 +40,10 @@ export function RailNub({ onOpen }: { onOpen: () => void }) {
   const unreadCount = unread.size + unreadPosts;
 
   const hasAgentActivity = agentPosts.length > 0;
-  // Nothing connected and nothing posted: show the mark rather than an empty
-  // bar, so a resting rail still looks like a thing that works.
-  const isIdle = present.length === 0 && !hasAgentActivity;
+  const openTasks = tasks.filter((t) => !t.done).length;
+  // Nothing connected, nothing posted and nothing to do: show the mark rather
+  // than an empty bar, so a resting rail still looks like a thing that works.
+  const isIdle = present.length === 0 && !hasAgentActivity && openTasks === 0;
   const isSliver = restingForm === "sliver";
   const dotSize = isSliver ? 5 : 7;
 
@@ -127,6 +129,19 @@ export function RailNub({ onOpen }: { onOpen: () => void }) {
               />
             </svg>
           )}
+        </span>
+      )}
+
+      {openTasks > 0 && (
+        <span
+          data-testid="nub-task-count"
+          className="flex flex-col items-center"
+          style={{ color: "var(--hub-text-muted)", fontSize: 9.5, lineHeight: 1.1 }}
+        >
+          {!isSliver && <span aria-hidden="true">✓</span>}
+          <span className="font-bold tabular-nums" style={{ color: "#eab308" }}>
+            {openTasks}
+          </span>
         </span>
       )}
 

@@ -14,7 +14,7 @@ const sessions = [
 
 describe("RailNub", () => {
   beforeEach(() => {
-    useHubStore.setState({ sessions, unreadSessions: new Set(["a", "b"]), agentPosts: [] });
+    useHubStore.setState({ sessions, unreadSessions: new Set(["a", "b"]), agentPosts: [], tasks: [] });
     useRailStore.setState({ restingForm: "nub" });
   });
 
@@ -60,7 +60,7 @@ describe("RailNub", () => {
   it("shows the hive mark when there is nothing else to show", () => {
     // A resting rail with no sessions and no agent activity used to render as a
     // blank black bar, which reads as broken rather than as idle.
-    useHubStore.setState({ sessions: [], unreadSessions: new Set(), agentPosts: [] });
+    useHubStore.setState({ sessions: [], unreadSessions: new Set(), agentPosts: [], tasks: [] });
     render(<RailNub onOpen={vi.fn()} />);
     expect(screen.getByTestId("rail-idle-mark")).toBeInTheDocument();
     expect(screen.queryByTestId("status-dot")).toBeNull();
@@ -72,6 +72,7 @@ describe("RailNub", () => {
     useHubStore.setState({
       sessions: [],
       unreadSessions: new Set(),
+      tasks: [],
       agentPosts: [
         { id: "p1", agentId: "a", agentName: "Grok", appId: null, content: "x", postType: "info", timestamp: "", read: false },
         { id: "p2", agentId: "a", agentName: "Grok", appId: null, content: "y", postType: "info", timestamp: "", read: false },
@@ -85,6 +86,7 @@ describe("RailNub", () => {
     useHubStore.setState({
       sessions,
       unreadSessions: new Set(["a"]),
+      tasks: [],
       agentPosts: [
         { id: "p1", agentId: "a", agentName: "Grok", appId: null, content: "x", postType: "info", timestamp: "", read: false },
       ],
@@ -97,6 +99,7 @@ describe("RailNub", () => {
     useHubStore.setState({
       sessions: [],
       unreadSessions: new Set(),
+      tasks: [],
       agentPosts: [
         { id: "p1", agentId: "a", agentName: "Grok", appId: null, content: "x", postType: "info", timestamp: "", read: true },
       ],
@@ -109,11 +112,45 @@ describe("RailNub", () => {
     useHubStore.setState({
       sessions: [],
       unreadSessions: new Set(),
+      tasks: [],
       agentPosts: [
         { id: "p1", agentId: "a", agentName: "Grok", appId: null, content: "x", postType: "info", timestamp: "", read: true },
       ],
     });
     render(<RailNub onOpen={vi.fn()} />);
     expect(screen.getByTestId("agent-marker")).toBeInTheDocument();
+  });
+
+  it("shows the open task count on the nub", () => {
+    // The spec's third resting variant: two numbers worth showing, unread
+    // activity and open tasks, still inside 32px.
+    useHubStore.setState({
+      sessions: [],
+      unreadSessions: new Set(),
+      agentPosts: [],
+      tasks: [
+        { id: "t1", externalId: null, agentId: null, title: "a", appId: null, sourceLabel: null, due: null, done: false, completedBy: null, completedAt: null, notes: [], createdAt: "", updatedAt: "" },
+        { id: "t2", externalId: null, agentId: null, title: "b", appId: null, sourceLabel: null, due: null, done: true, completedBy: null, completedAt: null, notes: [], createdAt: "", updatedAt: "" },
+      ],
+    });
+    render(<RailNub onOpen={vi.fn()} />);
+    expect(screen.getByTestId("nub-task-count")).toHaveTextContent("1");
+  });
+
+  it("hides the task count when nothing is open", () => {
+    useHubStore.setState({ sessions: [], unreadSessions: new Set(), agentPosts: [], tasks: [] });
+    render(<RailNub onOpen={vi.fn()} />);
+    expect(screen.queryByTestId("nub-task-count")).toBeNull();
+  });
+
+  it("does not look idle when only tasks are outstanding", () => {
+    useHubStore.setState({
+      sessions: [],
+      unreadSessions: new Set(),
+      agentPosts: [],
+      tasks: [{ id: "t1", externalId: null, agentId: null, title: "a", appId: null, sourceLabel: null, due: null, done: false, completedBy: null, completedAt: null, notes: [], createdAt: "", updatedAt: "" }],
+    });
+    render(<RailNub onOpen={vi.fn()} />);
+    expect(screen.queryByTestId("rail-idle-mark")).toBeNull();
   });
 });

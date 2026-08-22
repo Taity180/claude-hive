@@ -7,6 +7,7 @@ import { useRailStore } from "./stores/railStore";
 import { RailNub } from "./components/RailNub";
 import { RailPanel } from "./components/RailPanel";
 import { AgentsPane } from "./components/AgentsPane";
+import { TasksPane } from "./components/TasksPane";
 import { RailChrome } from "./components/RailChrome";
 import { useAgentData } from "./hooks/useAgentData";
 import { useRailResize } from "./hooks/useRailResize";
@@ -35,7 +36,7 @@ export function Rail() {
   // The rail window is created hidden at startup, so this component mounts long
   // before it is on screen. Rust tells us when that changes; without it the
   // cursor-follow poll below would run all day against a hidden window.
-  const [pane, setPane] = useState<"feed" | "agents">("feed");
+  const [pane, setPane] = useState<"feed" | "tasks" | "agents">("feed");
   // Which edge the panel grows from, so the slide-in runs the right way.
   const anchorSide = anchor === "left" || anchor === "tl" || anchor === "bl" ? "left" : "right";
   const [onScreen, setOnScreen] = useState(false);
@@ -101,7 +102,7 @@ export function Rail() {
             role="group"
             aria-label="Rail pane"
           >
-            {(["feed", "agents"] as const).map((id) => (
+            {(["feed", "tasks", "agents"] as const).map((id) => (
               <button
                 key={id}
                 type="button"
@@ -117,13 +118,13 @@ export function Rail() {
                   color: pane === id ? "var(--hub-text)" : "var(--hub-text-muted)",
                 }}
               >
-                {id === "feed" ? "Activity" : "Agents"}
+                {id === "feed" ? "Activity" : id === "tasks" ? "Tasks" : "Agents"}
               </button>
             ))}
             <span className="flex-1" />
             <RailChrome onCollapse={() => setOpen(false)} />
           </div>
-          {pane === "feed" ? <RailPanel /> : <AgentsPane />}
+          {pane === "feed" ? <RailPanel /> : pane === "tasks" ? <TasksPane /> : <AgentsPane />}
         </div>
       ) : (
         <RailNub onOpen={() => setOpen(true)} />
