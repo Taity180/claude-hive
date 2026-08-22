@@ -1,0 +1,95 @@
+import { useHubStore } from "../stores/hubStore";
+import { resolveAppIcon } from "../icons/appIcon";
+import { AppIcon } from "./AppIcon";
+import type { AppHealth } from "../types";
+
+/**
+ * Health is not a session status, so it gets its own scale rather than
+ * borrowing the status palette — otherwise a degraded app would read as a
+ * session that needs attention.
+ */
+const healthColor: Record<AppHealth, string> = {
+  ok: "#22c55e",
+  degraded: "#eab308",
+  down: "#ef4444",
+};
+
+interface ConnectedAppsBarProps {
+  selected: string | null;
+  onSelect: (appId: string | null) => void;
+}
+
+export function ConnectedAppsBar({ selected, onSelect }: ConnectedAppsBarProps) {
+  const apps = useHubStore((s) => s.agentApps);
+
+  if (apps.length === 0) {
+    return (
+      <div
+        className="px-3 py-2 text-[10.5px] shrink-0"
+        style={{
+          color: "var(--hub-text-muted)",
+          borderBottom: "1px solid var(--hub-hair)",
+        }}
+      >
+        No apps connected
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className="flex items-center gap-1.5 px-2 py-2 shrink-0 overflow-x-auto scrollbar-none"
+      style={{ borderBottom: "1px solid var(--hub-hair)" }}
+    >
+      {apps.map((app) => {
+        const isSelected = selected === app.id;
+        const icon = resolveAppIcon(app.id, app.label);
+        return (
+          <button
+            // Keyed per agent: two agents may both expose Gmail, and collapsing
+            // them would lose which agent to reply to.
+            key={`${app.agentId}:${app.id}`}
+            type="button"
+            data-testid="app-node"
+            data-app-id={app.id}
+            data-selected={isSelected ? "true" : undefined}
+            data-health={app.health}
+            title={`${app.label} — via ${app.agentName}`}
+            aria-pressed={isSelected}
+            // Clicking the selected app clears the filter, so the bar is both
+            // the way in and the way back out.
+            onClick={() => onSelect(isSelected ? null : app.id)}
+            className="relative shrink-0 grid place-items-center rounded-md"
+            style={{
+              width: 25,
+              height: 25,
+              border: 0,
+              cursor: "pointer",
+              background: isSelected
+                ? "var(--hub-accent)"
+                : icon.kind === "monogram"
+                  ? `hsl(${icon.hue} 45% 22%)`
+                  : "var(--hub-surface)",
+              boxShadow: isSelected ? "none" : "inset 0 0 0 1px var(--hub-hair)",
+            }}
+          >
+            <AppIcon slug={app.id} label={app.label} />
+            <span
+              aria-hidden="true"
+              style={{
+                position: "absolute",
+                right: -2,
+                bottom: -2,
+                width: 7,
+                height: 7,
+                borderRadius: 999,
+                background: healthColor[app.health],
+                boxShadow: "0 0 0 1.5px var(--hub-bg-solid)",
+              }}
+            />
+          </button>
+        );
+      })}
+    </div>
+  );
+}
