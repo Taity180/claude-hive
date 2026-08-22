@@ -148,7 +148,59 @@ export type WsEvent =
       sessionId: string;
       questionId: string;
       answer: string[];
-    };
+    }
+  | { type: "agentConnected"; agent: Agent }
+  | { type: "agentAppsChanged"; agentId: string; apps: AgentApp[] }
+  | { type: "agentPosted"; post: AgentPost };
 
 export type ViewState = "collapsed" | "expanded" | "session-detail" | "settings";
 export type SessionViewMode = "grid" | "list" | "detailed";
+
+// ── External MCP agents ────────────────────────────────────────────────
+// Shapes mirror src-tauri/src/models/agent.rs. Verified against a live
+// server in src-tauri/tests/agent_ingest.md.
+
+export type AppHealth = "ok" | "degraded" | "down";
+
+/** An external MCP-speaking agent. Not a Claude Code session. */
+export interface Agent {
+  id: string;
+  /** Reported by the agent via MCP clientInfo — never hardcoded per vendor. */
+  name: string;
+  version: string | null;
+  connectedAt: string;
+  lastSeen: string;
+  /** False mutes the agent without revoking its token. */
+  enabled: boolean;
+}
+
+export interface AgentApp {
+  /** Stable slug the agent chose. Also the icon lookup key. */
+  id: string;
+  label: string;
+  health: AppHealth;
+}
+
+/** An app flattened onto its owning agent, as `/api/agents/apps` returns it. */
+export interface AgentAppRow extends AgentApp {
+  agentId: string;
+  agentName: string;
+}
+
+export interface AgentPost {
+  id: string;
+  agentId: string;
+  /** Denormalised, so a post outlives its agent disconnecting. */
+  agentName: string;
+  appId: string | null;
+  content: string;
+  postType: MessageType;
+  timestamp: string;
+  read: boolean;
+}
+
+export interface ConnectionInfo {
+  endpoint: string;
+  token: string | null;
+  promptBlock: string;
+}
