@@ -84,6 +84,17 @@ pub fn monitor_containing(monitors: &[MonitorRect], cursor: (i32, i32)) -> Optio
     })
 }
 
+/// Index of the primary monitor. Windows always places the primary display at
+/// the desktop origin, and every other monitor is offset from it — which is why
+/// a multi-monitor setup reports negative coordinates for screens to the left.
+/// Falls back to the first monitor if nothing sits at the origin.
+pub fn primary_index(monitors: &[MonitorRect]) -> usize {
+    monitors
+        .iter()
+        .position(|m| m.x == 0 && m.y == 0)
+        .unwrap_or(0)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -180,5 +191,61 @@ mod tests {
     #[test]
     fn no_monitors_is_not_a_panic() {
         assert_eq!(monitor_containing(&[], (0, 0)), None);
+    }
+
+    /// The real layout on the development machine: a 1440p primary at the
+    /// origin with three 1080p screens around it, two of them at negative x and
+    /// all three at a different y origin. Enumeration order is not sorted.
+    fn four_screens() -> Vec<MonitorRect> {
+        vec![
+            MonitorRect { x: 0, y: 0, width: 2560, height: 1440 },
+            MonitorRect { x: -3840, y: 149, width: 1920, height: 1080 },
+            MonitorRect { x: 2560, y: 154, width: 1920, height: 1080 },
+            MonitorRect { x: -1920, y: 141, width: 1920, height: 1080 },
+        ]
+    }
+
+    #[test]
+    fn resolves_the_cursor_across_a_four_monitor_desktop() {
+        let m = four_screens();
+        assert_eq!(monitor_containing(&m, (1280, 700)), Some(0));
+        assert_eq!(monitor_containing(&m, (-3000, 500)), Some(1));
+        assert_eq!(monitor_containing(&m, (3500, 800)), Some(2));
+        assert_eq!(monitor_containing(&m, (-1000, 600)), Some(3));
+    }
+
+    #[test]
+    fn a_cursor_above_an_offset_screen_is_off_every_monitor() {
+        // The left-hand screens start at y=141 and y=149, so y=50 out there is
+        // in dead space above them — the case that has to fall back rather than
+        // silently pick monitor 0.
+        assert_eq!(monitor_containing(&four_screens(), (-1000, 50)), None);
+    }
+
+    #[test]
+    fn the_primary_is_the_screen_at_the_origin_not_the_first_enumerated() {
+        assert_eq!(primary_index(&four_screens()), 0);
+
+        let primary_listed_last = vec![
+            MonitorRect { x: -1920, y: 141, width: 1920, height: 1080 },
+            MonitorRect { x: 0, y: 0, width: 2560, height: 1440 },
+        ];
+        assert_eq!(primary_index(&primary_listed_last), 1);
+    }
+
+    #[test]
+    fn primary_index_falls_back_when_nothing_sits_at_the_origin() {
+        let odd = vec![MonitorRect { x: -1920, y: 141, width: 1920, height: 1080 }];
+        assert_eq!(primary_index(&odd), 0);
+        assert_eq!(primary_index(&[]), 0);
+    }
+
+    #[test]
+    fn anchors_to_the_right_edge_of_a_far_left_screen() {
+        // Placing on DISPLAY5 must land near x = -1920, not near the primary.
+        let m = four_screens();
+        let (x, y) = anchored_position(m[1], Anchor::Right, (32, 140), 8);
+        assert_eq!(x, -3840 + 1920 - 32 - 8);
+        assert_eq!(y, 149 + (1080 - 140) / 2);
     }
 }

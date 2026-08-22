@@ -238,6 +238,8 @@ pub fn run() {
                         tray::TrayIconBuilder,
                     };
 
+                    rail::window::create_hidden(app.handle());
+
                     let show = MenuItem::with_id(app, "show", "Show Claude Hive", true, None::<&str>)?;
                     let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
                     let menu = Menu::with_items(app, &[&show, &quit])?;
