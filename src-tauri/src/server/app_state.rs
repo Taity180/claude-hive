@@ -4,7 +4,7 @@ use tokio::sync::{broadcast, RwLock};
 use crate::models::WsEvent;
 use crate::state::{
     AgentFeed, AgentRegistry, AgentTokens, MessageStore, PlanUsageClient, QuestionStore,
-    SessionRegistry, UsageScanner,
+    SessionRegistry, TaskStore, UsageScanner,
 };
 
 #[derive(Clone)]
@@ -16,6 +16,7 @@ pub struct AppState {
     pub plan_usage: PlanUsageClient,
     pub agents: AgentRegistry,
     pub agent_feed: AgentFeed,
+    pub tasks: TaskStore,
     /// Behind a lock because issuing a token mutates and then persists it.
     pub agent_tokens: Arc<RwLock<AgentTokens>>,
     pub event_tx: broadcast::Sender<WsEvent>,
@@ -46,6 +47,7 @@ impl AppState {
             plan_usage: PlanUsageClient::new(),
             agents: AgentRegistry::new(),
             agent_feed: AgentFeed::new(),
+            tasks: TaskStore::load_or_create(dir),
             agent_tokens: Arc::new(RwLock::new(tokens)),
             event_tx,
         }
@@ -66,6 +68,13 @@ mod tests {
         );
         assert!(state.agents.list().await.is_empty());
         assert!(state.agent_feed.recent(10).await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn a_fresh_state_has_an_empty_task_list() {
+        let dir = tempfile::tempdir().unwrap();
+        let state = AppState::with_token_dir(dir.path());
+        assert!(state.tasks.list().await.is_empty());
     }
 
     #[tokio::test]
