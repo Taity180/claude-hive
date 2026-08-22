@@ -74,6 +74,16 @@ pub fn anchored_position(
     }
 }
 
+/// Index of the monitor whose rect contains `cursor`. Half-open on the far
+/// edges, so a cursor exactly on a shared boundary belongs to exactly one
+/// monitor rather than matching both.
+pub fn monitor_containing(monitors: &[MonitorRect], cursor: (i32, i32)) -> Option<usize> {
+    let (cx, cy) = cursor;
+    monitors.iter().position(|m| {
+        cx >= m.x && cx < m.x + m.width as i32 && cy >= m.y && cy < m.y + m.height as i32
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -139,5 +149,36 @@ mod tests {
         assert_eq!(Anchor::from_str_id("br"), Some(Anchor::BottomRight));
         assert_eq!(Anchor::from_str_id("left"), Some(Anchor::Left));
         assert_eq!(Anchor::from_str_id("elsewhere"), None);
+    }
+
+    fn two_screens() -> Vec<MonitorRect> {
+        vec![
+            MonitorRect { x: 0, y: 0, width: 2560, height: 1440 },
+            MonitorRect { x: 2560, y: 0, width: 1920, height: 1080 },
+        ]
+    }
+
+    #[test]
+    fn finds_the_monitor_under_the_cursor() {
+        assert_eq!(monitor_containing(&two_screens(), (100, 100)), Some(0));
+        assert_eq!(monitor_containing(&two_screens(), (3000, 500)), Some(1));
+    }
+
+    #[test]
+    fn the_left_edge_belongs_to_the_monitor_it_starts() {
+        // Exactly on the boundary must resolve to the second screen, not both.
+        assert_eq!(monitor_containing(&two_screens(), (2560, 10)), Some(1));
+        assert_eq!(monitor_containing(&two_screens(), (2559, 10)), Some(0));
+    }
+
+    #[test]
+    fn a_cursor_in_the_dead_space_below_a_shorter_screen_finds_nothing() {
+        // Screen 2 is only 1080 tall, so y=1200 at x=3000 is off every screen.
+        assert_eq!(monitor_containing(&two_screens(), (3000, 1200)), None);
+    }
+
+    #[test]
+    fn no_monitors_is_not_a_panic() {
+        assert_eq!(monitor_containing(&[], (0, 0)), None);
     }
 }
