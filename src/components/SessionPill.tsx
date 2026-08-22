@@ -20,9 +20,8 @@ export function SessionPill({ session, hasUnread, onClick }: SessionPillProps) {
   const [editing, setEditing] = useState(false);
   const { status, windowHandle } = session;
   const color = statusColors[status];
-  const isPulsing = status === "waiting_for_input" || status === "error";
-  const borderColor = color;
-  const borderDim = `${color}44`;
+  const needsUser = status === "waiting_for_input";
+  const isPulsing = needsUser || status === "error";
 
   // The pill behaves as a button but is rendered as a div: a <button> may not
   // contain the <input> the rename field needs. Swapping the tag while editing
@@ -32,6 +31,7 @@ export function SessionPill({ session, hasUnread, onClick }: SessionPillProps) {
     <div
       role={editing ? undefined : "button"}
       tabIndex={editing ? undefined : 0}
+      data-attention={needsUser ? "true" : undefined}
       onClick={editing ? undefined : onClick}
       onKeyDown={(e) => {
         if (!editing && (e.key === "Enter" || e.key === " ")) {
@@ -39,18 +39,20 @@ export function SessionPill({ session, hasUnread, onClick }: SessionPillProps) {
           onClick();
         }
       }}
-      className={`flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] whitespace-nowrap transition-colors status-border-pulse ${
+      className={`flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] whitespace-nowrap transition-colors ${
         editing ? "" : "hover:brightness-125 cursor-pointer"
       }`}
       style={{
-        background: "var(--hub-surface)",
-        border: `1px solid ${borderColor}`,
+        // Only the row that is blocked on the user gets a tinted ground; a
+        // coloured border on every row made four sessions compete and the one
+        // that needed attention disappear into the crowd.
+        background: needsUser ? "var(--hub-attention)" : "var(--hub-surface)",
+        border: "1px solid var(--hub-hair, rgba(255,255,255,0.09))",
         color: "var(--hub-text-muted)",
-        "--pulse-color": borderColor,
-        "--pulse-color-dim": borderDim,
-      } as React.CSSProperties}
+      }}
     >
       <span
+        data-testid="status-dot"
         className={`w-2 h-2 rounded-full shrink-0 ${isPulsing ? "animate-pulse" : ""}`}
         style={{ background: color }}
       />
