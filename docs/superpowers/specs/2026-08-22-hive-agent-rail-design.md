@@ -285,6 +285,30 @@ Following the existing pattern (`*.test.tsx` beside components, `models/tests.rs
 - **Feed ordering** — a `waiting_for_input` session outranks a newer agent post while the pin setting is on.
 - **Regression** — existing collapsed-bar and question-prompt tests must pass untouched.
 
+## Platform constraints learned while building phases 1–2
+
+These cost real time to find and are invisible in the source. Anything in later
+phases that creates or reparents a window must respect them.
+
+- **Windows must be created during `setup()`, before the event loop starts.**
+  `WebviewWindowBuilder::build()` blocks until the webview exists, and once the
+  loop is running that wait never completes — from a command worker thread *and*
+  from `run_on_main_thread`, because that closure runs on the loop `build()`
+  needs to pump. It returns nothing and logs nothing; the window half-exists and
+  never paints. **Phase 5's combined mode must not create windows on demand.**
+- **Capabilities are per-window.** A window absent from a capability's `windows`
+  list gets no core plugin access, so its webview cannot invoke anything. It
+  fails silently: no Rust error, only a console message inside a window that may
+  not be visible. `rail/window.rs` has a test asserting the file lists the rail.
+- **`transparent` CSS on a non-transparent window renders white.** Any window
+  root needs a solid background token, or unpainted frames flash white.
+- **A GUI process has no console.** `tracing` output through a `pnpm` shim is
+  discarded on Windows, so failures leave no trail. The rail appends to
+  `%TEMP%/hive-rail.log` for this reason; anything similarly hard to observe
+  should do the same.
+- **`HIVE_RAIL_AUTOOPEN=1`** opens the rail at startup through the same `show()`
+  path as a real click, so window placement can be verified without a human.
+
 ## Risks
 
 | Risk | Mitigation |
