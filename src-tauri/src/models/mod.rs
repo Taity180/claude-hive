@@ -1,5 +1,6 @@
 pub mod agent;
 pub mod session;
+pub mod task;
 pub mod message;
 pub mod question;
 pub mod usage;
@@ -8,6 +9,7 @@ pub mod events;
 
 pub use agent::*;
 pub use session::*;
+pub use task::*;
 pub use message::*;
 pub use question::*;
 pub use usage::*;
