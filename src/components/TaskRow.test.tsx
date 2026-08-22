@@ -124,13 +124,15 @@ describe("TaskRow", () => {
     expect(screen.getByTestId("task-due")).not.toHaveAttribute("data-late");
   });
 
-  it("says no date rather than inventing one", () => {
+  it("shows no date chip at all rather than inventing one", () => {
+    // These rows live under a "No date" heading, so repeating it per row is
+    // noise — and a fabricated date would be worse than either.
     render(<TaskRow task={task({ due: null })} />);
-    expect(screen.getByTestId("task-due")).toHaveTextContent(/no date/i);
+    expect(screen.queryByTestId("task-due")).toBeNull();
   });
 
   it("treats an unparseable date as no date", () => {
     render(<TaskRow task={task({ due: "not a date" })} />);
-    expect(screen.getByTestId("task-due")).toHaveTextContent(/no date/i);
+    expect(screen.queryByTestId("task-due")).toBeNull();
   });
 });

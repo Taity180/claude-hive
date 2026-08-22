@@ -4,13 +4,17 @@ import { AppIcon } from "./AppIcon";
 import type { Task } from "../types";
 
 /**
- * A missing or unparseable date reads as "No date", never as today. Inventing
- * a deadline the source never stated would put a false urgency on the list.
+ * Null when there is no usable date.
+ *
+ * A missing or unparseable date is never rendered as today — inventing a
+ * deadline the source never stated would put false urgency on the list. It is
+ * not rendered as "No date" either: these rows sit under a "No date" heading,
+ * so repeating it on every row is noise.
  */
-function dueLabel(due: string | null): { text: string; late: boolean } {
-  if (!due) return { text: "No date", late: false };
+function dueLabel(due: string | null): { text: string; late: boolean } | null {
+  if (!due) return null;
   const date = new Date(due);
-  if (Number.isNaN(date.getTime())) return { text: "No date", late: false };
+  if (Number.isNaN(date.getTime())) return null;
 
   const now = new Date();
   return {
@@ -26,7 +30,7 @@ export function TaskRow({ task }: { task: Task }) {
   const [notesOpen, setNotesOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const due = dueLabel(task.due);
-  const isLate = due.late && !task.done;
+  const isLate = (due?.late ?? false) && !task.done;
   const agentCompleted = task.completedBy?.kind === "agent" ? task.completedBy : null;
 
   const toggle = async () => {
@@ -95,17 +99,19 @@ export function TaskRow({ task }: { task: Task }) {
             </span>
           )}
 
-          <span
-            data-testid="task-due"
-            data-late={isLate ? "true" : undefined}
-            className="text-[9.5px]"
-            style={{
-              color: isLate ? "#ff7a70" : "var(--hub-text-dim)",
-              fontWeight: isLate ? 600 : 400,
-            }}
-          >
-            {due.text}
-          </span>
+          {due && (
+            <span
+              data-testid="task-due"
+              data-late={isLate ? "true" : undefined}
+              className="text-[9.5px]"
+              style={{
+                color: isLate ? "#ff7a70" : "var(--hub-text-dim)",
+                fontWeight: isLate ? 600 : 400,
+              }}
+            >
+              {due.text}
+            </span>
+          )}
 
           {/* Attribution, not decoration: an agent quietly ticking the user's
               work off would be a trust problem. */}
