@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { Session, Message, PlanUsageSnapshot, Question, UsageSnapshot, ViewState, WsEvent } from "../types";
+import type { Agent, AgentAppRow, AgentPost, Session, Message, PlanUsageSnapshot, Question, UsageSnapshot, ViewState, WsEvent } from "../types";
 
 // Minimum sensible height for the expanded dashboard. Guards against a bad
 // value being persisted (e.g. someone resized the window to almost nothing
@@ -32,6 +32,13 @@ interface HubState {
   unreadSessions: Set<string>;
   expandedHeight: number;
 
+  /** External MCP agents that have completed a handshake. */
+  agents: Agent[];
+  /** Every declared app across every agent, for the apps bar. */
+  agentApps: AgentAppRow[];
+  /** Newest first. */
+  agentPosts: AgentPost[];
+
   setViewState: (view: ViewState) => void;
   setActiveSession: (sessionId: string | null) => void;
   setExpandedHeight: (height: number) => void;
@@ -46,6 +53,9 @@ interface HubState {
   setUsagePanelHeight: (height: number) => void;
   renameSession: (sessionId: string, name: string | null) => void;
   clearMessages: (sessionId: string) => void;
+  setAgents: (agents: Agent[]) => void;
+  setAgentApps: (apps: AgentAppRow[]) => void;
+  setAgentPosts: (posts: AgentPost[]) => void;
 }
 
 /** Drop one session's question from the map. */
@@ -68,6 +78,9 @@ export const useHubStore = create<HubState>((set) => ({
   viewState: "collapsed",
   activeSessionId: null,
   unreadSessions: new Set(),
+  agents: [],
+  agentApps: [],
+  agentPosts: [],
   expandedHeight: DEFAULT_EXPANDED_HEIGHT,
 
   setViewState: (viewState) =>
@@ -130,6 +143,10 @@ export const useHubStore = create<HubState>((set) => ({
     set((state) => ({
       messages: { ...state.messages, [sessionId]: [] },
     })),
+
+  setAgents: (agents) => set({ agents }),
+  setAgentApps: (agentApps) => set({ agentApps }),
+  setAgentPosts: (agentPosts) => set({ agentPosts }),
 
   handleWsEvent: (event) =>
     set((state) => {
@@ -211,6 +228,38 @@ export const useHubStore = create<HubState>((set) => ({
               ? state.unreadSessions
               : new Set([...state.unreadSessions, question.sessionId]),
           };
+        }
+
+        case "agentConnected": {
+          const known = state.agents.some((a) => a.id === event.agent.id);
+          return {
+            agents: known
+              ? state.agents.map((a) => (a.id === event.agent.id ? event.agent : a))
+              : [...state.agents, event.agent],
+          };
+        }
+
+        case "agentPosted": {
+          // A live event can arrive for a post the initial fetch already
+          // returned; keying on id keeps the feed from showing it twice.
+          if (state.agentPosts.some((p) => p.id === event.post.id)) {
+            return {};
+          }
+          return { agentPosts: [event.post, ...state.agentPosts] };
+        }
+
+        case "agentAppsChanged": {
+          const agentName =
+            state.agents.find((a) => a.id === event.agentId)?.name ?? "Unknown agent";
+          // agent_apps_sync replaces rather than merges, so this agent's rows
+          // are rebuilt wholesale while other agents' rows are left alone.
+          const others = state.agentApps.filter((a) => a.agentId !== event.agentId);
+          const mine = event.apps.map((app) => ({
+            ...app,
+            agentId: event.agentId,
+            agentName,
+          }));
+          return { agentApps: [...others, ...mine] };
         }
 
         case "questionAnswered": {
