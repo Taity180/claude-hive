@@ -10,6 +10,7 @@ import { GlobalUsage } from "./components/UsageMeter";
 import { PlanUsageChip } from "./components/PlanUsage";
 import { SessionDetail } from "./components/SessionDetail";
 import { Settings } from "./components/Settings";
+import { RailButton } from "./components/RailButton";
 
 // Vertical padding contributed by the scroll wrapper (`p-1` → 4px top + 4px bottom).
 // Kept in one place so the sizing math stays in sync with the JSX below.
@@ -188,6 +189,8 @@ function WindowBar({ barRef, captureExpandedHeight }: WindowBarProps) {
           {usagePanelOpen ? "Collapse" : "Expand"}
         </button>
       )}
+
+      <RailButton />
 
       {/* Window controls */}
       <div className="flex items-center gap-0.5 ml-1">

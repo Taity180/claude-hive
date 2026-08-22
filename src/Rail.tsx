@@ -21,6 +21,7 @@ export function Rail() {
   const anchor = useRailStore((s) => s.anchor);
   const offset = useRailStore((s) => s.offset);
   const restingForm = useRailStore((s) => s.restingForm);
+  const followCursor = useRailStore((s) => s.followCursor);
   const currentSize = useRailStore((s) => s.currentSize);
   const sizes = useRailStore((s) => s.sizes);
 
@@ -32,6 +33,22 @@ export function Rail() {
       console.error("[hive] place_rail failed:", err);
     });
   }, [open, anchor, offset, restingForm, sizes, currentSize]);
+
+  // Cursor-follow. Polling is the only option — there is no cursor-crossed-
+  // monitor event — but 250ms is well below the point where the movement reads
+  // as laggy, and it is skipped while the rail is open so the window never
+  // yanks out from under a click.
+  useEffect(() => {
+    if (!followCursor || open) return;
+    const [width, height] = NUB_SIZE[restingForm];
+    const id = window.setInterval(() => {
+      invoke("place_rail", { anchor, width, height, offset }).catch(() => {
+        // A transient failure during a display change should not kill the
+        // interval; place_rail's own failures are logged by the effect above.
+      });
+    }, 250);
+    return () => window.clearInterval(id);
+  }, [followCursor, open, anchor, offset, restingForm]);
 
   return (
     <div
