@@ -77,11 +77,57 @@ impl AgentTokens {
             .collect()
     }
 
+    /// Write the token file, owner-readable only.
+    ///
+    /// This file is credentials. `std::fs::write` would leave it at the
+    /// umask default — 0644, world-readable — on Unix. Windows inherits the
+    /// user-only ACL of `%APPDATA%`, but the path is cross-platform, so the
+    /// mode is set explicitly rather than left to the platform.
     pub fn save(&self, dir: &Path) -> std::io::Result<()> {
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::DirBuilderExt;
+            std::fs::DirBuilder::new()
+                .recursive(true)
+                .mode(0o700)
+                .create(dir)
+                .or_else(|e| {
+                    // Already there: tighten it rather than fail.
+                    if e.kind() == std::io::ErrorKind::AlreadyExists {
+                        Ok(())
+                    } else {
+                        Err(e)
+                    }
+                })?;
+        }
+        #[cfg(not(unix))]
         std::fs::create_dir_all(dir)?;
+
         let json = serde_json::to_string_pretty(self)
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
-        std::fs::write(dir.join(FILE_NAME), json)
+
+        let path = dir.join(FILE_NAME);
+        let mut opts = std::fs::OpenOptions::new();
+        opts.write(true).create(true).truncate(true);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            opts.mode(0o600);
+        }
+
+        use std::io::Write;
+        let mut file = opts.open(&path)?;
+        file.write_all(json.as_bytes())?;
+
+        // An existing file keeps its old mode through OpenOptions, so set it
+        // again for a token file written before this fix landed.
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600))?;
+        }
+
+        Ok(())
     }
 }
 
@@ -151,6 +197,22 @@ mod tests {
         let ids: Vec<String> = tokens.tokens().into_iter().map(|(_, id)| id).collect();
         let labels: Vec<Option<String>> = ids.iter().map(|id| tokens.label_for(id)).collect();
         assert!(labels.iter().any(|l| l.as_deref() == Some("research")));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn the_token_file_is_not_world_readable() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let tokens = AgentTokens::load_or_create(dir.path());
+        tokens.save(dir.path()).unwrap();
+
+        let mode = std::fs::metadata(dir.path().join("agent-tokens.json"))
+            .unwrap()
+            .permissions()
+            .mode()
+            & 0o777;
+        assert_eq!(mode, 0o600, "bearer credentials must be owner-only, got {mode:o}");
     }
 
     #[test]
