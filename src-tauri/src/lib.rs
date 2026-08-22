@@ -1,6 +1,7 @@
 pub mod desktop;
 pub mod mcp;
 pub mod models;
+pub mod rail;
 pub mod server;
 pub mod state;
 pub mod tray_badge;
