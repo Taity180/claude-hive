@@ -2,7 +2,7 @@ use serde_json::{json, Value};
 
 use crate::mcp::agent_tools::{AGENT_TOOLS, SERVER_INSTRUCTIONS};
 use crate::mcp::types::JsonRpcResponse;
-use crate::models::{AgentApp, MessageType, WsEvent};
+use crate::models::{Actor, AgentApp, MessageType, WsEvent};
 use crate::server::app_state::AppState;
 
 /// Wrap text as an MCP tool result.
@@ -192,6 +192,123 @@ async fn handle_tools_call(
                 id,
                 format!("{} reply/replies from the user:\n{body}", replies.len()),
             )
+        }
+
+        "tasks_upsert" => {
+            let Some(title) = args
+                .get("title")
+                .and_then(|t| t.as_str())
+                .map(str::trim)
+                .filter(|t| !t.is_empty())
+            else {
+                return tool_error(id, "tasks_upsert requires a non-empty `title`.");
+            };
+            let external_id = args
+                .get("external_id")
+                .and_then(|v| v.as_str())
+                .map(String::from);
+            let app_id = args.get("app_id").and_then(|v| v.as_str()).map(String::from);
+            let source_label = args
+                .get("source_label")
+                .and_then(|v| v.as_str())
+                .map(String::from);
+            // An unparseable due date becomes no due date. Guessing would put a
+            // deadline on the user's list that nothing actually stated.
+            let due = args
+                .get("due")
+                .and_then(|v| v.as_str())
+                .and_then(|v| chrono::DateTime::parse_from_rfc3339(v).ok())
+                .map(|dt| dt.with_timezone(&chrono::Utc));
+
+            let task = state
+                .tasks
+                .upsert_from_agent(
+                    agent_id,
+                    external_id,
+                    title.to_string(),
+                    app_id,
+                    source_label,
+                    due,
+                )
+                .await;
+            let _ = state.event_tx.send(WsEvent::TaskUpserted { task });
+            text_result(id, "Task recorded.")
+        }
+
+        "tasks_list" => {
+            let include_done = args
+                .get("include_done")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(true);
+            let mut tasks = state.tasks.list().await;
+            tasks.retain(|t| include_done || !t.done);
+            if tasks.is_empty() {
+                return text_result(id, "No tasks.");
+            }
+            let body = tasks
+                .iter()
+                .map(|t| {
+                    let mark = if t.done { "[x]" } else { "[ ]" };
+                    let notes = if t.notes.is_empty() {
+                        String::new()
+                    } else {
+                        format!(
+                            "\n    notes: {}",
+                            t.notes
+                                .iter()
+                                .map(|n| n.body.as_str())
+                                .collect::<Vec<_>>()
+                                .join(" | ")
+                        )
+                    };
+                    format!("{mark} {} (id {}){notes}", t.title, t.id)
+                })
+                .collect::<Vec<_>>()
+                .join("\n");
+            text_result(id, body)
+        }
+
+        "tasks_complete" => {
+            let Some(task_id) = args.get("task_id").and_then(|v| v.as_str()) else {
+                return tool_error(id, "tasks_complete requires `task_id`.");
+            };
+            let done = args.get("done").and_then(|v| v.as_bool()).unwrap_or(true);
+            let actor = Actor::Agent {
+                id: agent_id.to_string(),
+                name: agent.name.clone(),
+            };
+            if !state.tasks.set_done(task_id, done, actor).await {
+                return tool_error(id, format!("No task with id {task_id}."));
+            }
+            if let Some(task) = state.tasks.get(task_id).await {
+                let _ = state.event_tx.send(WsEvent::TaskUpserted { task });
+            }
+            text_result(id, "Task updated.")
+        }
+
+        "tasks_note" => {
+            let Some(task_id) = args.get("task_id").and_then(|v| v.as_str()) else {
+                return tool_error(id, "tasks_note requires `task_id`.");
+            };
+            let Some(body) = args
+                .get("body")
+                .and_then(|v| v.as_str())
+                .map(str::trim)
+                .filter(|b| !b.is_empty())
+            else {
+                return tool_error(id, "tasks_note requires a non-empty `body`.");
+            };
+            let actor = Actor::Agent {
+                id: agent_id.to_string(),
+                name: agent.name.clone(),
+            };
+            if !state.tasks.add_note(task_id, actor, body.to_string()).await {
+                return tool_error(id, format!("No task with id {task_id}."));
+            }
+            if let Some(task) = state.tasks.get(task_id).await {
+                let _ = state.event_tx.send(WsEvent::TaskUpserted { task });
+            }
+            text_result(id, "Note added.")
         }
 
         other => tool_error(id, format!("Unknown tool: {other}")),
@@ -447,6 +564,128 @@ mod tests {
         state.agents.upsert("a1", "Grok".into(), None).await;
         let value = call(&state, "agent_nope", json!({})).await;
         assert!(value["result"]["isError"].as_bool().unwrap_or(false));
+    }
+
+    #[tokio::test]
+    async fn tasks_upsert_creates_a_task_with_its_source() {
+        let (state, _dir) = test_state();
+        state.agents.upsert("a1", "Grok".into(), None).await;
+
+        let value = call(&state, "tasks_upsert", json!({
+            "external_id": "gmail:thread-1",
+            "title": "Send Sarah the Q3 rates breakdown",
+            "app_id": "gmail",
+            "source_label": "Re: Q3 invoicing"
+        })).await;
+        assert!(value["result"]["isError"].is_null(), "unexpected error: {value}");
+
+        let tasks = state.tasks.list().await;
+        assert_eq!(tasks.len(), 1);
+        assert_eq!(tasks[0].app_id.as_deref(), Some("gmail"));
+        assert_eq!(tasks[0].source_label.as_deref(), Some("Re: Q3 invoicing"));
+    }
+
+    #[tokio::test]
+    async fn tasks_upsert_is_idempotent_over_the_wire() {
+        let (state, _dir) = test_state();
+        state.agents.upsert("a1", "Grok".into(), None).await;
+        let args = json!({ "external_id": "gmail:1", "title": "Reply" });
+
+        call(&state, "tasks_upsert", args.clone()).await;
+        call(&state, "tasks_upsert", args).await;
+
+        assert_eq!(state.tasks.list().await.len(), 1, "one thread, one task");
+    }
+
+    #[tokio::test]
+    async fn tasks_upsert_requires_a_title() {
+        let (state, _dir) = test_state();
+        state.agents.upsert("a1", "Grok".into(), None).await;
+        let value = call(&state, "tasks_upsert", json!({ "external_id": "k" })).await;
+        assert!(value["result"]["isError"].as_bool().unwrap_or(false));
+        assert!(state.tasks.list().await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn tasks_upsert_accepts_an_iso_due_date_and_rejects_nonsense() {
+        let (state, _dir) = test_state();
+        state.agents.upsert("a1", "Grok".into(), None).await;
+
+        call(&state, "tasks_upsert", json!({
+            "external_id": "k1", "title": "Dated", "due": "2026-08-28T09:00:00Z"
+        })).await;
+        let dated = state.tasks.list().await;
+        assert!(dated[0].due.is_some());
+
+        // A due date we cannot parse must not become "now" — a fake deadline is
+        // worse than none.
+        call(&state, "tasks_upsert", json!({
+            "external_id": "k2", "title": "Bad date", "due": "next tuesday"
+        })).await;
+        let task = state.tasks.list().await.into_iter().find(|t| t.title == "Bad date").unwrap();
+        assert!(task.due.is_none());
+    }
+
+    #[tokio::test]
+    async fn tasks_list_returns_what_the_user_has_done() {
+        let (state, _dir) = test_state();
+        state.agents.upsert("a1", "Grok".into(), None).await;
+        let task = state.tasks.create_for_user("Mine".into(), None).await;
+        state.tasks.set_done(&task.id, true, crate::models::Actor::User).await;
+        state.tasks.add_note(&task.id, crate::models::Actor::User, "my note".into()).await;
+
+        let value = call(&state, "tasks_list", json!({})).await;
+        let text = value["result"]["content"][0]["text"].as_str().unwrap();
+        assert!(text.contains("Mine"));
+        assert!(text.contains("my note"), "the agent should see the user's notes");
+    }
+
+    #[tokio::test]
+    async fn tasks_complete_is_attributed_to_the_agent() {
+        let (state, _dir) = test_state();
+        state.agents.upsert("a1", "Grok".into(), None).await;
+        let task = state.tasks.create_for_user("Thing".into(), None).await;
+
+        call(&state, "tasks_complete", json!({ "task_id": task.id })).await;
+
+        let after = state.tasks.get(&task.id).await.unwrap();
+        assert!(after.done);
+        match after.completed_by {
+            Some(crate::models::Actor::Agent { ref name, .. }) => assert_eq!(name, "Grok"),
+            other => panic!("expected agent attribution, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn tasks_note_is_attributed_and_does_not_complete_anything() {
+        let (state, _dir) = test_state();
+        state.agents.upsert("a1", "Grok".into(), None).await;
+        let task = state.tasks.create_for_user("Thing".into(), None).await;
+
+        call(&state, "tasks_note", json!({ "task_id": task.id, "body": "export finished" })).await;
+
+        let after = state.tasks.get(&task.id).await.unwrap();
+        assert_eq!(after.notes.len(), 1);
+        assert!(matches!(after.notes[0].author, crate::models::Actor::Agent { .. }));
+        assert!(!after.done, "a note is not a completion");
+    }
+
+    #[tokio::test]
+    async fn task_tools_on_an_unknown_task_report_an_error() {
+        let (state, _dir) = test_state();
+        state.agents.upsert("a1", "Grok".into(), None).await;
+        let value = call(&state, "tasks_complete", json!({ "task_id": "nope" })).await;
+        assert!(value["result"]["isError"].as_bool().unwrap_or(false));
+    }
+
+    #[tokio::test]
+    async fn a_muted_agent_cannot_push_tasks() {
+        let (state, _dir) = test_state();
+        state.agents.upsert("a1", "Grok".into(), None).await;
+        state.agents.set_enabled("a1", false).await;
+        let value = call(&state, "tasks_upsert", json!({ "title": "Sneaky" })).await;
+        assert!(value["result"]["isError"].as_bool().unwrap_or(false));
+        assert!(state.tasks.list().await.is_empty());
     }
 
     #[tokio::test]
