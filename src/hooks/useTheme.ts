@@ -26,6 +26,10 @@ export function useTheme() {
     root.style.setProperty("--hub-accent", theme.accent);
     root.style.setProperty("--hub-accent-text", theme.accentText);
     root.style.setProperty("--hub-blur", theme.blur);
+    root.style.setProperty("--hub-spec", theme.spec);
+    root.style.setProperty("--hub-hair", theme.hair);
+    root.style.setProperty("--hub-text-dim", theme.textDim);
+    root.style.setProperty("--hub-attention", theme.attention);
   }, [theme]);
 
   return { theme, setTheme };

@@ -10,6 +10,14 @@ export interface Theme {
   accent: string;
   accentText: string;
   blur: string;
+  /** 1px highlight on the top edge only — reads as a lit bevel. */
+  spec: string;
+  /** Hairline divider, inset from the left in lists. */
+  hair: string;
+  /** Third-level label, below textMuted. For timestamps and counts. */
+  textDim: string;
+  /** Background tint for the one row that is blocked on the user. */
+  attention: string;
 }
 
 export const themes: Theme[] = [
@@ -25,6 +33,10 @@ export const themes: Theme[] = [
     accent: "#60a5fa",
     accentText: "#0a0a0a",
     blur: "blur(20px)",
+    spec: "rgba(255, 255, 255, 0.16)",
+    hair: "rgba(255, 255, 255, 0.09)",
+    textDim: "rgba(255, 255, 255, 0.28)",
+    attention: "rgba(234, 179, 8, 0.12)",
   },
   {
     id: "warm-neutral",
@@ -38,6 +50,10 @@ export const themes: Theme[] = [
     accent: "#f59e0b",
     accentText: "#1c1917",
     blur: "blur(16px)",
+    spec: "rgba(255, 255, 255, 0.14)",
+    hair: "rgba(255, 255, 255, 0.08)",
+    textDim: "rgba(214, 211, 209, 0.32)",
+    attention: "rgba(245, 158, 11, 0.13)",
   },
   {
     id: "cool-slate",
@@ -51,6 +67,10 @@ export const themes: Theme[] = [
     accent: "#14b8a6",
     accentText: "#0f172a",
     blur: "blur(16px)",
+    spec: "rgba(255, 255, 255, 0.14)",
+    hair: "rgba(255, 255, 255, 0.08)",
+    textDim: "rgba(203, 213, 225, 0.3)",
+    attention: "rgba(20, 184, 166, 0.13)",
   },
   {
     id: "minimal-carbon",
@@ -64,6 +84,10 @@ export const themes: Theme[] = [
     accent: "#22c55e",
     accentText: "#0a0a0a",
     blur: "blur(12px)",
+    spec: "rgba(255, 255, 255, 0.11)",
+    hair: "rgba(255, 255, 255, 0.06)",
+    textDim: "rgba(212, 212, 212, 0.28)",
+    attention: "rgba(34, 197, 94, 0.12)",
   },
   {
     id: "nord",
@@ -77,6 +101,10 @@ export const themes: Theme[] = [
     accent: "#88c0d0",
     accentText: "#2e3440",
     blur: "blur(16px)",
+    spec: "rgba(255, 255, 255, 0.15)",
+    hair: "rgba(255, 255, 255, 0.09)",
+    textDim: "rgba(236, 239, 244, 0.32)",
+    attention: "rgba(136, 192, 208, 0.14)",
   },
   {
     id: "solarized-dark",
@@ -90,6 +118,10 @@ export const themes: Theme[] = [
     accent: "#b58900",
     accentText: "#002b36",
     blur: "blur(16px)",
+    spec: "rgba(255, 255, 255, 0.13)",
+    hair: "rgba(255, 255, 255, 0.08)",
+    textDim: "rgba(253, 246, 227, 0.28)",
+    attention: "rgba(181, 137, 0, 0.16)",
   },
   {
     id: "dracula",
@@ -103,6 +135,10 @@ export const themes: Theme[] = [
     accent: "#ff79c6",
     accentText: "#282a36",
     blur: "blur(16px)",
+    spec: "rgba(255, 255, 255, 0.15)",
+    hair: "rgba(255, 255, 255, 0.09)",
+    textDim: "rgba(248, 248, 242, 0.3)",
+    attention: "rgba(255, 121, 198, 0.13)",
   },
   {
     id: "monokai",
@@ -116,6 +152,10 @@ export const themes: Theme[] = [
     accent: "#fd971f",
     accentText: "#272822",
     blur: "blur(16px)",
+    spec: "rgba(255, 255, 255, 0.14)",
+    hair: "rgba(255, 255, 255, 0.08)",
+    textDim: "rgba(248, 248, 242, 0.3)",
+    attention: "rgba(253, 151, 31, 0.14)",
   },
   {
     id: "catppuccin-mocha",
@@ -129,6 +169,10 @@ export const themes: Theme[] = [
     accent: "#b4befe",
     accentText: "#1e1e2e",
     blur: "blur(16px)",
+    spec: "rgba(255, 255, 255, 0.15)",
+    hair: "rgba(255, 255, 255, 0.09)",
+    textDim: "rgba(205, 214, 244, 0.3)",
+    attention: "rgba(180, 190, 254, 0.14)",
   },
   {
     id: "rose-pine",
@@ -142,6 +186,10 @@ export const themes: Theme[] = [
     accent: "#ebbcba",
     accentText: "#191724",
     blur: "blur(16px)",
+    spec: "rgba(255, 255, 255, 0.14)",
+    hair: "rgba(255, 255, 255, 0.09)",
+    textDim: "rgba(224, 222, 244, 0.3)",
+    attention: "rgba(235, 188, 186, 0.14)",
   },
 ];
 
