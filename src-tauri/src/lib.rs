@@ -1,6 +1,7 @@
 pub mod desktop;
 pub mod mcp;
 pub mod models;
+pub mod rail;
 pub mod server;
 pub mod state;
 pub mod tray_badge;
@@ -152,6 +153,20 @@ fn hide_window(window: tauri::Window) {
     let _ = window.hide();
 }
 
+/// Show the main Hive window from another window.
+///
+/// `hide_window` hides whichever window called it, so the rail needs a way to
+/// bring Hive back when the user detaches — it cannot act on Hive's window
+/// through its own handle.
+#[tauri::command]
+fn show_main_window(app: tauri::AppHandle) -> Result<(), String> {
+    let Some(main) = app.get_webview_window("main") else {
+        return Err("main window is missing".into());
+    };
+    main.show().map_err(|e| e.to_string())?;
+    main.set_focus().map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 fn start_dragging(window: tauri::Window) {
     let _ = window.start_dragging();
@@ -237,6 +252,8 @@ pub fn run() {
                         tray::TrayIconBuilder,
                     };
 
+                    rail::window::create_hidden(app.handle());
+
                     let show = MenuItem::with_id(app, "show", "Show Claude Hive", true, None::<&str>)?;
                     let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
                     let menu = Menu::with_items(app, &[&show, &quit])?;
@@ -304,7 +321,14 @@ pub fn run() {
                     minimize_window,
                     hide_window,
                     start_dragging,
-                    update_tray_badge
+                    show_main_window,
+                    update_tray_badge,
+                    rail::window::open_rail,
+                    rail::window::close_rail,
+                    rail::window::place_rail,
+                    rail::window::reopen_rail,
+                    rail::window::list_monitors,
+                    rail::window::cursor_over_rail
                 ])
                 .run(tauri::generate_context!())
                 .expect("error while running tauri application");

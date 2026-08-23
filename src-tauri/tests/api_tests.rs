@@ -5,8 +5,15 @@ use serde_json::json;
 use claude_hive_lib::server::{create_router, AppState};
 use claude_hive_lib::models::Session;
 
+/// A server whose persisted files live in a temp directory.
+///
+/// Never `AppState::new()` here: it reads and writes the real user config
+/// directory, so running this suite would mutate the developer's own tasks and
+/// declared agents. The directory is deliberately leaked rather than threaded
+/// through every test as a guard — the test process is about to exit anyway.
 fn test_server() -> TestServer {
-    let state = AppState::new();
+    let dir: &'static tempfile::TempDir = Box::leak(Box::new(tempfile::tempdir().unwrap()));
+    let state = AppState::with_token_dir(dir.path());
     let router = create_router(state, None);
     TestServer::new(router)
 }
@@ -419,4 +426,164 @@ async fn notify_without_a_body_uses_just_the_title() {
         .await
         .json();
     assert_eq!(all[0].content, "Done");
+}
+
+
+/// The token the rail hands an agent, so a test can speak MCP as one.
+async fn agent_token(server: &TestServer) -> String {
+    let info: serde_json::Value = server.get("/api/agents/connection").await.json();
+    info["token"].as_str().expect("a token").to_string()
+}
+
+async fn mcp(server: &TestServer, token: &str, body: serde_json::Value) -> serde_json::Value {
+    server
+        .post("/mcp")
+        .add_header("authorization", format!("Bearer {token}"))
+        .json(&body)
+        .await
+        .json()
+}
+
+async fn connect_agent(server: &TestServer) -> String {
+    let token = agent_token(server).await;
+    mcp(
+        server,
+        &token,
+        json!({
+            "jsonrpc": "2.0", "id": 1, "method": "initialize",
+            "params": { "clientInfo": { "name": "Grok Bot", "version": "1" } }
+        }),
+    )
+    .await;
+    token
+}
+
+#[tokio::test]
+async fn an_agent_question_reaches_the_rail_and_its_answer_reaches_the_agent() {
+    let server = test_server();
+    let token = connect_agent(&server).await;
+
+    mcp(
+        &server,
+        &token,
+        json!({
+            "jsonrpc": "2.0", "id": 2, "method": "tools/call",
+            "params": {
+                "name": "agent_ask",
+                "arguments": {
+                    "question": "Reply to Sarah now?",
+                    "options": ["Yes", "Later"],
+                    "app_id": "gmail",
+                    "wait_seconds": 0
+                }
+            }
+        }),
+    )
+    .await;
+
+    // The rail hydrates from here when it opens.
+    let pending: Vec<serde_json::Value> = server.get("/api/agents/questions").await.json();
+    assert_eq!(pending.len(), 1);
+    assert_eq!(pending[0]["question"], "Reply to Sarah now?");
+    assert_eq!(pending[0]["appId"], "gmail");
+    let question_id = pending[0]["id"].as_str().unwrap().to_string();
+
+    // The click.
+    let answered = server
+        .post(&format!("/api/agents/questions/{question_id}/answer"))
+        .json(&json!({ "choice": "Later" }))
+        .await;
+    answered.assert_status_ok();
+
+    // Answered questions leave the pending list…
+    let still_pending: Vec<serde_json::Value> = server.get("/api/agents/questions").await.json();
+    assert!(still_pending.is_empty());
+
+    // …and the agent collects the choice.
+    let result = mcp(
+        &server,
+        &token,
+        json!({
+            "jsonrpc": "2.0", "id": 3, "method": "tools/call",
+            "params": { "name": "agent_ask_result", "arguments": { "question_id": question_id } }
+        }),
+    )
+    .await;
+    assert!(
+        result["result"]["content"][0]["text"]
+            .as_str()
+            .unwrap()
+            .contains("Later"),
+        "{result}"
+    );
+}
+
+#[tokio::test]
+async fn answering_an_agent_question_twice_conflicts() {
+    let server = test_server();
+    let token = connect_agent(&server).await;
+    mcp(
+        &server,
+        &token,
+        json!({
+            "jsonrpc": "2.0", "id": 2, "method": "tools/call",
+            "params": {
+                "name": "agent_ask",
+                "arguments": { "question": "Now?", "options": ["Yes", "No"], "wait_seconds": 0 }
+            }
+        }),
+    )
+    .await;
+    let pending: Vec<serde_json::Value> = server.get("/api/agents/questions").await.json();
+    let id = pending[0]["id"].as_str().unwrap().to_string();
+
+    server
+        .post(&format!("/api/agents/questions/{id}/answer"))
+        .json(&json!({ "choice": "Yes" }))
+        .await
+        .assert_status_ok();
+
+    // Two windows can show the same question; the second click must not
+    // overwrite the first answer.
+    server
+        .post(&format!("/api/agents/questions/{id}/answer"))
+        .json(&json!({ "choice": "No" }))
+        .await
+        .assert_status(StatusCode::CONFLICT);
+}
+
+#[tokio::test]
+async fn an_answer_that_is_not_on_offer_is_rejected() {
+    let server = test_server();
+    let token = connect_agent(&server).await;
+    mcp(
+        &server,
+        &token,
+        json!({
+            "jsonrpc": "2.0", "id": 2, "method": "tools/call",
+            "params": {
+                "name": "agent_ask",
+                "arguments": { "question": "Now?", "options": ["Yes", "No"], "wait_seconds": 0 }
+            }
+        }),
+    )
+    .await;
+    let pending: Vec<serde_json::Value> = server.get("/api/agents/questions").await.json();
+    let id = pending[0]["id"].as_str().unwrap().to_string();
+
+    server
+        .post(&format!("/api/agents/questions/{id}/answer"))
+        .json(&json!({ "choice": "Maybe" }))
+        .await
+        .assert_status(StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn answering_a_question_nobody_asked_is_not_found() {
+    let server = test_server();
+    server
+        .post("/api/agents/questions/nope/answer")
+        .json(&json!({ "choice": "Yes" }))
+        .await
+        .assert_status(StatusCode::NOT_FOUND);
 }

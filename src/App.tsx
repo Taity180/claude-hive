@@ -10,6 +10,9 @@ import { GlobalUsage } from "./components/UsageMeter";
 import { PlanUsageChip } from "./components/PlanUsage";
 import { SessionDetail } from "./components/SessionDetail";
 import { Settings } from "./components/Settings";
+import { RailButton } from "./components/RailButton";
+import { useRailStore } from "./stores/railStore";
+import { useRailSettingsSync } from "./hooks/useRailSettingsSync";
 
 // Vertical padding contributed by the scroll wrapper (`p-1` → 4px top + 4px bottom).
 // Kept in one place so the sizing math stays in sync with the JSX below.
@@ -86,7 +89,7 @@ function WindowBar({ barRef, captureExpandedHeight }: WindowBarProps) {
       className="flex items-center gap-2 px-3 py-1.5 shrink-0 select-none cursor-grab active:cursor-grabbing"
       style={{
         background: "var(--hub-bg-solid, #111)",
-        borderBottom: "1px solid var(--hub-border, #333)",
+        borderBottom: "1px solid var(--hub-hair, rgba(255,255,255,0.09))",
       }}
     >
       {/* App icon */}
@@ -189,6 +192,8 @@ function WindowBar({ barRef, captureExpandedHeight }: WindowBarProps) {
         </button>
       )}
 
+      <RailButton />
+
       {/* Window controls */}
       <div className="flex items-center gap-0.5 ml-1">
         <button
@@ -218,12 +223,14 @@ function App() {
   useWebSocket();
   useUsage();
   useTheme();
+  useRailSettingsSync();
 
   const viewState = useHubStore((s) => s.viewState);
   const sessions = useHubStore((s) => s.sessions);
   const expandedHeight = useHubStore((s) => s.expandedHeight);
   const setExpandedHeight = useHubStore((s) => s.setExpandedHeight);
   const usagePanelHeight = useHubStore((s) => s.usagePanelHeight);
+  const combined = useRailStore((s) => s.combined);
 
   const windowBarRef = useRef<HTMLDivElement>(null);
   const collapsedContentRef = useRef<HTMLDivElement>(null);
@@ -287,8 +294,19 @@ function App() {
     void invokeCommand("resize_preserving_width", { height: expandedHeight });
   }, [viewState, expandedHeight]);
 
+  // Combined mode moves Hive *into* the rail, so this window steps aside —
+  // two copies of the same panes on screen is worse than either alone. The
+  // rail's "Detach Hive" button calls `show_main_window` to bring it back.
+  useEffect(() => {
+    if (!combined) return;
+    void invokeCommand("hide_window");
+  }, [combined]);
+
   return (
-    <div className="h-screen w-screen overflow-hidden flex flex-col" style={{ background: "var(--hub-bg-solid, #141414)" }}>
+    <div
+      className="h-screen w-screen overflow-hidden flex flex-col hub-material"
+      style={{ background: "var(--hub-bg-solid, #141414)" }}
+    >
       <WindowBar barRef={windowBarRef} captureExpandedHeight={captureExpandedHeight} />
       <div className="flex-1 overflow-auto p-1">
         {viewState === "collapsed" && <CollapsedBar ref={collapsedContentRef} />}

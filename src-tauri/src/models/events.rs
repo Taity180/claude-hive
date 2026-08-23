@@ -1,5 +1,8 @@
 use serde::Serialize;
-use super::{Session, SessionStatus, Message, NotifyPriority, Question};
+use super::{
+    Agent, AgentApp, AgentPost, AgentQuestion, Message, NotifyPriority, Question, Session,
+    SessionStatus, Task,
+};
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
@@ -18,4 +21,18 @@ pub enum WsEvent {
     QuestionAsked { question: Question },
     #[serde(rename_all = "camelCase")]
     QuestionAnswered { session_id: String, question_id: String, answer: Vec<String> },
+    #[serde(rename_all = "camelCase")]
+    AgentConnected { agent: Agent },
+    #[serde(rename_all = "camelCase")]
+    AgentAppsChanged { agent_id: String, apps: Vec<AgentApp> },
+    #[serde(rename_all = "camelCase")]
+    AgentPosted { post: AgentPost },
+    #[serde(rename_all = "camelCase")]
+    AgentAsked { question: AgentQuestion },
+    #[serde(rename_all = "camelCase")]
+    AgentQuestionAnswered { question: AgentQuestion },
+    #[serde(rename_all = "camelCase")]
+    TaskUpserted { task: Task },
+    #[serde(rename_all = "camelCase")]
+    TaskRemoved { task_id: String },
 }

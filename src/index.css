@@ -1,15 +1,40 @@
 @import "tailwindcss";
 
 :root {
+  /* Native UI face first — Segoe UI Variable on Windows, SF on macOS. Inter
+     led this stack before, which read as a web app rather than a desktop one. */
   font-family:
-    Inter,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI Variable Text",
+    "Segoe UI",
     system-ui,
-    Avenir,
-    Helvetica,
-    Arial,
     sans-serif;
   line-height: 1.5;
   font-weight: 400;
+  letter-spacing: -0.005em;
+}
+
+/* The AppKit edge vocabulary: a lit top edge and a faint inner ring, nothing
+   on the other three sides. Applied to window roots. */
+.hub-material {
+  box-shadow:
+    inset 0 1px 0 var(--hub-spec, rgba(255, 255, 255, 0.16)),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.045);
+}
+
+/* Hairline divider inset from the left, the way a native list draws it. */
+.hub-hairline {
+  position: relative;
+}
+.hub-hairline::before {
+  content: "";
+  position: absolute;
+  left: 11px;
+  right: 0;
+  top: 0;
+  height: 1px;
+  background: var(--hub-hair, rgba(255, 255, 255, 0.09));
 }
 
 html,
@@ -21,6 +46,20 @@ body,
   height: 100%;
   overflow: hidden;
   background: #141414;
+}
+
+/*
+ * The rail paints its own grounds, at its own opacity.
+ *
+ * Hive's window is opaque and needs this ground, or the webview shows through
+ * as white. The rail's window is transparent, and a solid ground here sat behind
+ * every surface and made the opacity settings do nothing at all — the alpha was
+ * correct and there was simply nothing behind it to see.
+ */
+html[data-window="rail"],
+html[data-window="rail"] body,
+html[data-window="rail"] #root {
+  background: transparent;
 }
 
 /* Custom scrollbar — thin, dark, matches the UI */
@@ -47,16 +86,6 @@ body,
   background: rgba(255, 255, 255, 0.25);
 }
 
-/* Pulsing status border glow for session items */
-@keyframes status-pulse {
-  0%, 100% { border-color: var(--pulse-color); box-shadow: 0 0 3px 0 var(--pulse-color); }
-  50% { border-color: var(--pulse-color-dim); box-shadow: 0 0 1px 0 var(--pulse-color-dim); }
-}
-
-.status-border-pulse {
-  animation: status-pulse 2.5s ease-in-out infinite;
-}
-
 /* Hide scrollbar completely on collapsed pill row */
 .scrollbar-none {
   scrollbar-width: none;
@@ -64,3 +93,54 @@ body,
 .scrollbar-none::-webkit-scrollbar {
   display: none;
 }
+
+/* A drawer reveal: the content slides out of the edge it is anchored to and
+   fades up, over a window that is already the right size and already painted.
+   Nothing here moves the window, which is what made the old version read as
+   the whole thing travelling across the screen.
+
+   180ms on cubic-bezier(0.16, 1, 0.3, 1) — most of the distance covered early,
+   settling rather than stopping. */
+@keyframes rail-reveal-from-right {
+  from { opacity: 0; transform: translateX(20px); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes rail-reveal-from-left {
+  from { opacity: 0; transform: translateX(-20px); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes rail-reveal-from-top {
+  from { opacity: 0; transform: translateY(-20px); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes rail-reveal-from-bottom {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: none; }
+}
+
+.rail-slide-in {
+  animation: rail-reveal-from-right 180ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.rail-slide-in[data-anchor-side="left"] {
+  animation-name: rail-reveal-from-left;
+}
+.rail-slide-in[data-anchor-side="top"] {
+  animation-name: rail-reveal-from-top;
+}
+.rail-slide-in[data-anchor-side="bottom"] {
+  animation-name: rail-reveal-from-bottom;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rail-slide-in {
+    animation: none;
+  }
+}
+
+/* A dimmed idle rail comes back to full strength when the pointer reaches it,
+   so it is always recoverable without going via the Hive window. */
+[data-testid="rail-nub"][data-dimmed="true"]:hover {
+  opacity: 1 !important;
+}
+
+

@@ -1,7 +1,18 @@
 import React, { Component, type ReactNode } from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
+import { Rail } from "./Rail";
+import { currentWindowLabel } from "./windowLabel";
 import "./index.css";
+
+// Hive and the Rail are two Tauri windows served from this one bundle, so the
+// label decides which root mounts.
+const windowLabel = currentWindowLabel();
+const Root = windowLabel === "rail" ? Rail : App;
+
+// Stylesheets need to know which window they are in: the rail's is transparent
+// and must not paint a page-level ground, Hive's is opaque and must.
+document.documentElement.dataset.window = windowLabel;
 
 class ErrorBoundary extends Component<
   { children: ReactNode },
@@ -40,7 +51,7 @@ class ErrorBoundary extends Component<
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
     <ErrorBoundary>
-      <App />
+      <Root />
     </ErrorBoundary>
   </React.StrictMode>,
 );

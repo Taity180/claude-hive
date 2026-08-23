@@ -1,3 +1,5 @@
+pub mod agent_routes;
+pub mod task_routes;
 pub mod app_state;
 pub mod routes;
 pub mod websocket;
@@ -9,6 +11,8 @@ use axum::{
 use tower_http::cors::CorsLayer;
 
 pub use app_state::AppState;
+use agent_routes::*;
+use task_routes::*;
 use routes::*;
 
 /// Start a background task that prunes sessions with no activity for 30 seconds.
@@ -86,6 +90,21 @@ pub fn create_router(state: AppState, static_dir: Option<std::path::PathBuf>) ->
         .route("/api/sessions/{session_id}/ask", post(ask_question))
         .route("/api/sessions/{session_id}/ask", get(get_question))
         .route("/api/sessions/{session_id}/ask/answer", post(answer_question))
+        .route("/mcp", post(mcp_endpoint))
+        .route("/api/agents", get(list_agents))
+        .route("/api/agents/apps", get(agent_apps))
+        .route("/api/agents/posts", get(agent_posts))
+        .route("/api/agents/connection", get(agent_connection_info))
+        .route("/api/agents/{agent_id}/reply", post(reply_to_agent))
+        .route("/api/agents/{agent_id}/enabled", put(set_agent_enabled))
+        .route("/api/agents/{agent_id}/pending", get(agent_pending_replies))
+        .route("/api/agents/questions", get(agent_questions))
+        .route("/api/agents/questions/{question_id}/answer", post(answer_agent_question))
+        .route("/api/tasks", get(list_tasks))
+        .route("/api/tasks", post(create_task))
+        .route("/api/tasks/{id}/done", put(set_task_done))
+        .route("/api/tasks/{id}/notes", post(add_task_note))
+        .route("/api/tasks/{id}", delete(delete_task))
         .route("/ws", get(websocket::ws_handler))
         .layer(CorsLayer::permissive())
         .with_state(state);

@@ -1,8 +1,8 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Default capabilities for the main Claude Hive window. Grants core plugin defaults (path, event, window, webview, app, image, resources, menu, tray) plus notification for attention alerts.",
-  "windows": ["main"],
+  "description": "Default capabilities for the Claude Hive windows. Grants core plugin defaults (path, event, window, webview, app, image, resources, menu, tray) plus notification for attention alerts. Capabilities are per-window in Tauri 2, so the rail is listed explicitly — omitting it leaves that window with no core plugin access at all.",
+  "windows": ["main", "rail"],
   "permissions": [
     "core:default",
     "notification:default"

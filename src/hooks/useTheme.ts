@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { getThemeById, defaultTheme, type Theme } from "../themes";
+import { getThemeById, defaultTheme, glass, type Theme } from "../themes";
 
 const STORAGE_KEY = "claude-hive-theme";
 
@@ -17,15 +17,23 @@ export function useTheme() {
 
   useEffect(() => {
     const root = document.documentElement;
-    root.style.setProperty("--hub-bg", theme.bg);
-    root.style.setProperty("--hub-bg-solid", theme.bgSolid);
-    root.style.setProperty("--hub-surface", theme.surface);
-    root.style.setProperty("--hub-border", theme.border);
-    root.style.setProperty("--hub-text", theme.text);
-    root.style.setProperty("--hub-text-muted", theme.textMuted);
+    // The surfaces do not vary: one dark-glass palette, so the app keeps its
+    // character whichever accent is chosen.
+    root.style.setProperty("--hub-bg", glass.bg);
+    root.style.setProperty("--hub-bg-solid", glass.bgSolid);
+    root.style.setProperty("--hub-surface", glass.surface);
+    root.style.setProperty("--hub-border", glass.border);
+    root.style.setProperty("--hub-text", glass.text);
+    root.style.setProperty("--hub-text-muted", glass.textMuted);
+    root.style.setProperty("--hub-text-dim", glass.textDim);
+    root.style.setProperty("--hub-blur", glass.blur);
+    root.style.setProperty("--hub-spec", glass.spec);
+    root.style.setProperty("--hub-hair", glass.hair);
+
+    // What a theme is actually for.
     root.style.setProperty("--hub-accent", theme.accent);
     root.style.setProperty("--hub-accent-text", theme.accentText);
-    root.style.setProperty("--hub-blur", theme.blur);
+    root.style.setProperty("--hub-attention", theme.attention);
   }, [theme]);
 
   return { theme, setTheme };

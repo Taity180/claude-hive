@@ -148,7 +148,113 @@ export type WsEvent =
       sessionId: string;
       questionId: string;
       answer: string[];
-    };
+    }
+  | { type: "agentConnected"; agent: Agent }
+  | { type: "agentAppsChanged"; agentId: string; apps: AgentApp[] }
+  | { type: "agentPosted"; post: AgentPost }
+  | { type: "agentAsked"; question: AgentQuestion }
+  | { type: "agentQuestionAnswered"; question: AgentQuestion }
+  | { type: "taskUpserted"; task: Task }
+  | { type: "taskRemoved"; taskId: string };
 
 export type ViewState = "collapsed" | "expanded" | "session-detail" | "settings";
 export type SessionViewMode = "grid" | "list" | "detailed";
+
+// ── External MCP agents ────────────────────────────────────────────────
+// Shapes mirror src-tauri/src/models/agent.rs. Verified against a live
+// server in src-tauri/tests/agent_ingest.md.
+
+export type AppHealth = "ok" | "degraded" | "down" | "unknown";
+
+/** An external MCP-speaking agent. Not a Claude Code session. */
+export interface Agent {
+  id: string;
+  /** Reported by the agent via MCP clientInfo — never hardcoded per vendor. */
+  name: string;
+  version: string | null;
+  connectedAt: string;
+  lastSeen: string;
+  /** False mutes the agent without revoking its token. */
+  enabled: boolean;
+}
+
+export interface AgentApp {
+  /** Stable slug the agent chose. Also the icon lookup key. */
+  id: string;
+  label: string;
+  health: AppHealth;
+}
+
+/** An app flattened onto its owning agent, as `/api/agents/apps` returns it. */
+export interface AgentAppRow extends AgentApp {
+  agentId: string;
+  agentName: string;
+}
+
+export interface AgentPost {
+  id: string;
+  agentId: string;
+  /** Denormalised, so a post outlives its agent disconnecting. */
+  agentName: string;
+  appId: string | null;
+  content: string;
+  postType: MessageType;
+  timestamp: string;
+  read: boolean;
+}
+
+/**
+ * A question an agent asked the user, answered by clicking an option.
+ *
+ * Not the session `Question` type: that one is keyed to a live session, and the
+ * session UI would go looking for a session that does not exist.
+ */
+export interface AgentQuestion {
+  id: string;
+  agentId: string;
+  /** Denormalised, so the row survives its agent disconnecting. */
+  agentName: string;
+  appId: string | null;
+  question: string;
+  options: string[];
+  askedAt: string;
+  answer: string | null;
+  answeredAt: string | null;
+}
+
+export interface ConnectionInfo {
+  endpoint: string;
+  token: string | null;
+  promptBlock: string;
+}
+
+// ── Tasks ──────────────────────────────────────────────────────────────
+// Mirrors src-tauri/src/models/task.rs.
+
+export type Actor = { kind: "user" } | { kind: "agent"; id: string; name: string };
+
+export interface TaskNote {
+  id: string;
+  author: Actor;
+  body: string;
+  createdAt: string;
+}
+
+export interface Task {
+  id: string;
+  /** Stable key from the pushing agent; the server dedupes on it. */
+  externalId: string | null;
+  /** Null for a task the user typed. */
+  agentId: string | null;
+  title: string;
+  appId: string | null;
+  sourceLabel: string | null;
+  /** Genuinely optional — an undated task is a real state, not a missing one. */
+  due: string | null;
+  done: boolean;
+  completedBy: Actor | null;
+  completedAt: string | null;
+  notes: TaskNote[];
+  createdAt: string;
+  updatedAt: string;
+}
