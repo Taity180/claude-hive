@@ -482,14 +482,22 @@ plugin-install snippet became the Plugin setup child. Hive's Settings view is
 kept, because it is the only way to reach any of this with the rail closed, and
 both edit the same store.
 
-### Frosted, not just faded
+### Frosted glass was tried, and removed
 
-Lowering the opacity showed the desktop through unchanged: CSS `backdrop-filter`
-only blurs what is inside the page, so the blur has to come from the compositor.
-`window-vibrancy` applies acrylic to the rail window at creation. Best-effort —
-acrylic needs Windows 10 1803 or later, and a machine that refuses it gets a
-plain translucent rail rather than no rail, which the diagnostic log records
-either way.
+Lowering the opacity shows the desktop through unblurred: CSS `backdrop-filter`
+only blurs what is inside the page, so a real frost has to come from the
+compositor. `window-vibrancy` did that — and it was the flash.
+
+DWM composites the acrylic backdrop the moment the window has size, which is
+before the webview presents its first frame at that size. What shows in that
+frame is Windows' own acrylic host surface: light grey on a light system theme.
+The tint is irrelevant (darkening it changed nothing), and nothing on the page
+side can cover it, because the page is not allowed to paint there yet.
+
+Measured, not guessed: 21 screen captures per open, counting frames whose mean
+brightness jumped. With acrylic, one to three pale frames every time. Without
+it, none. So the choice is frosted glass **or** a clean open, and a clean open
+won.
 
 ### Showing without a flash
 

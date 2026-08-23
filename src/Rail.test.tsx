@@ -410,7 +410,7 @@ describe("Rail", () => {
       });
 
       // Nothing placed yet: the panel has been rendered, not yet painted.
-      expect(invokeMock.mock.calls.filter((c) => c[0] === "place_rail")).toHaveLength(0);
+      expect(invokeMock.mock.calls.filter((c) => c[0] === "reopen_rail")).toHaveLength(0);
 
       // Two frames later it places, once, with no interpolation.
       await act(async () => {
@@ -422,7 +422,10 @@ describe("Rail", () => {
         await Promise.resolve();
       });
 
-      const placed = invokeMock.mock.calls.filter((c) => c[0] === "place_rail");
+      // Off screen, because opening changes the window's size: for one frame
+      // after a visible window is resized the page cannot paint the newly
+      // exposed area, and whatever is behind it shows instead.
+      const placed = invokeMock.mock.calls.filter((c) => c[0] === "reopen_rail");
       expect(placed.length).toBeGreaterThan(0);
       expect(invokeMock.mock.calls.map((c) => c[0])).not.toContain("animate_rail");
     } finally {
@@ -468,8 +471,10 @@ describe("Rail", () => {
         await Promise.resolve();
       });
 
-      // Painted but not shown, with the nub still covering it.
-      expect(screen.getByTestId("rail-panel").style.opacity).toBe("0");
+      // Painted but not shown, with the nub still covering it. The ground is
+      // painted from the start; it is the content that waits.
+      expect(screen.getByTestId("rail-content").style.opacity).toBe("0");
+      expect(screen.getByTestId("rail-panel").style.background).toContain("color-mix");
       expect(screen.getByTestId("rail-nub")).toBeInTheDocument();
 
       await act(async () => {
@@ -481,7 +486,7 @@ describe("Rail", () => {
         await Promise.resolve();
       });
 
-      expect(screen.getByTestId("rail-panel").style.opacity).toBe("1");
+      expect(screen.getByTestId("rail-content").style.opacity).toBe("1");
       expect(screen.queryByTestId("rail-nub")).toBeNull();
     } finally {
       raf.mockRestore();

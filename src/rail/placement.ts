@@ -27,9 +27,13 @@ let suppressUntil = 0;
  * Each open therefore started from a slightly smaller remembered size, recorded
  * intermediate frames of *that*, and ratcheted the panel down towards nothing.
  */
-export function placeRail(args: PlacementArgs, animate = false): Promise<void> {
+export function placeRail(args: PlacementArgs, offScreen = false): Promise<void> {
   markPlacement();
-  return invoke(animate ? "animate_rail" : "place_rail", args);
+  // `reopen_rail` hides the window for the resize and shows it again. For one
+  // frame after a visible window is resized, the webview's viewport has not
+  // caught up and the page cannot paint the newly exposed area, so whatever is
+  // behind it shows instead — the flash. Resizing off screen has no such frame.
+  return invoke(offScreen ? "reopen_rail" : "place_rail", args);
 }
 
 /** Note a placement made by some other route, so its resize is not recorded. */

@@ -326,6 +326,7 @@ pub fn run() {
                     rail::window::open_rail,
                     rail::window::close_rail,
                     rail::window::place_rail,
+                    rail::window::reopen_rail,
                     rail::window::list_monitors,
                     rail::window::cursor_over_rail
                 ])

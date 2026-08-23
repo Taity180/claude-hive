@@ -92,7 +92,6 @@ pub fn create_hidden(app: &AppHandle) {
         }
     };
 
-    frost(&rail);
 
     // Park it on an edge now, so the first frame after `show()` is already in
     // the right place rather than jumping once the rail's JS loads.
@@ -280,6 +279,45 @@ fn position_rail(
 /// thread, where `build()` would deadlock, and a caller that has no rail has
 /// nothing to place. Resizing and moving an existing window is safe off the
 /// main thread — Tauri proxies both.
+/// Resize and reposition while hidden, then show.
+///
+/// The flash was never the page. For one frame after the OS resizes a visible
+/// window, the webview's viewport has not caught up, so the page cannot paint
+/// the newly exposed area and whatever is behind it — the window background,
+/// the acrylic backdrop, Windows' own rounded-corner fill — shows instead. No
+/// amount of painting earlier can help, because the page is not allowed to draw
+/// there yet.
+///
+/// So the resize happens off screen. Hidden, resized, shown: the window is only
+/// ever visible at a size the page has already laid out for.
+#[tauri::command]
+pub fn reopen_rail(
+    app: AppHandle,
+    anchor: String,
+    width: u32,
+    height: u32,
+    offset: i32,
+    monitor: Option<usize>,
+) -> Result<(), String> {
+    let anchor = Anchor::from_str_id(&anchor).ok_or_else(|| format!("unknown anchor: {anchor}"))?;
+    let Some(rail) = app.get_webview_window(RAIL_LABEL) else {
+        return Ok(());
+    };
+
+    let was_visible = rail.is_visible().unwrap_or(false);
+    if was_visible {
+        rail.hide().map_err(|e| e.to_string())?;
+    }
+    let placed = position_rail(&app, &rail, anchor, (width, height), offset, monitor);
+    if was_visible {
+        // Show it again whatever placement did: a hidden rail is worse than a
+        // badly placed one.
+        rail.show().map_err(|e| e.to_string())?;
+        let _ = rail.set_always_on_top(true);
+    }
+    placed
+}
+
 #[tauri::command]
 pub fn place_rail(
     app: AppHandle,
@@ -295,28 +333,6 @@ pub fn place_rail(
     };
     position_rail(&app, &rail, anchor, (width, height), offset, monitor)
 }
-
-/// Blur what is behind the rail, so lowering its opacity frosts rather than
-/// just fades.
-///
-/// A transparent window on Windows shows the desktop through unchanged — CSS
-/// `backdrop-filter` cannot help, because it only blurs what is inside the page.
-/// The blur has to come from the compositor.
-///
-/// Best-effort by design: acrylic needs Windows 10 1803 or later, and a machine
-/// that refuses it should get a plain translucent rail rather than no rail.
-#[cfg(target_os = "windows")]
-fn frost(rail: &tauri::WebviewWindow) {
-    // Tinted almost black at a low alpha: the surfaces above carry the colour,
-    // and this only has to darken and blur what shows through them.
-    match window_vibrancy::apply_acrylic(rail, Some((10, 10, 12, 90))) {
-        Ok(()) => diag("frost: acrylic applied"),
-        Err(e) => diag(&format!("frost: acrylic unavailable ({e}), staying plain")),
-    }
-}
-
-#[cfg(not(target_os = "windows"))]
-fn frost(_rail: &tauri::WebviewWindow) {}
 
 /// Is the cursor over the rail right now?
 ///

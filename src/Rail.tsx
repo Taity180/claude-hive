@@ -129,16 +129,23 @@ export function Rail() {
     if (!onScreen) return;
     const [width, height] = open ? currentSize() : nubSize(anchor, restingForm);
     const opening = open && !wasOpen.current;
+    const collapsing = !open && wasOpen.current;
     wasOpen.current = open;
 
-    const place = () =>
-      placeRail({ anchor, width, height, offset, monitor: pinnedMonitor }).catch((err) => {
-        console.error("[hive] placing the rail failed:", err);
-      });
+    // Opening and collapsing change the window's size, so they go off screen to
+    // do it. Everything else only moves it, which has no exposed area.
+    const place = (offScreen = false) =>
+      placeRail({ anchor, width, height, offset, monitor: pinnedMonitor }, offScreen).catch(
+        (err) => {
+          console.error("[hive] placing the rail failed:", err);
+        }
+      );
 
     if (!opening) {
       setRevealed(true);
-      void place();
+      // Collapsing also changes the size, so it goes off screen too. Anything
+      // else is a move, which exposes nothing.
+      void place(collapsing);
       return;
     }
 
@@ -147,10 +154,13 @@ export function Rail() {
     const outer = requestAnimationFrame(() => {
       const inner = requestAnimationFrame(() => {
         if (cancelled) return;
-        void place();
-        // Same tick as the resize request: the panel is already rasterised, so
-        // showing it is a compositor change rather than a repaint.
-        setRevealed(true);
+        // Only once the window is actually the panel's size. Revealing in the
+        // same tick as *asking* for the resize left a frame showing the panel's
+        // corner inside the 30px window, which is the flash that kept coming
+        // back.
+        void place(true).finally(() => {
+          if (!cancelled) setRevealed(true);
+        });
       });
       frame.current = inner;
     });
@@ -328,14 +338,12 @@ export function Rail() {
             </div>
           )}
         <div
-          className={`flex flex-col ${revealed ? "rail-slide-in" : ""}`}
+          className="flex flex-col"
           data-testid="rail-panel"
-          data-anchor-side={anchorSide}
           style={{
-            // Painted but not shown. opacity rather than `visibility`, which
-            // skips painting altogether and would leave nothing rasterised.
-            opacity: revealed ? 1 : 0,
-            pointerEvents: revealed ? undefined : "none",
+            // The ground is painted from the start, so the window resize
+            // reveals a panel-coloured rectangle rather than whatever the OS
+            // would fill it with. Only the content waits.
             background: withOpacity("var(--hub-bg-solid, #141414)", panelOpacity),
             // Laid out for the final size rather than the window's current one,
             // so growing into place reveals the panel instead of reflowing it
@@ -346,6 +354,17 @@ export function Rail() {
             maxHeight: "100vh",
           }}
         >
+          <div
+            className={`flex flex-col flex-1 min-h-0 ${revealed ? "rail-slide-in" : ""}`}
+            data-testid="rail-content"
+            style={{
+              // Rasterised while invisible, so revealing it is a compositor
+              // change rather than a repaint the frosted backdrop waits on.
+              opacity: revealed ? 1 : 0,
+              pointerEvents: revealed ? undefined : "none",
+            }}
+            data-anchor-side={anchorSide}
+          >
           <div
             data-tauri-drag-region
             onMouseDown={startDrag}
@@ -362,6 +381,7 @@ export function Rail() {
             <RailChrome onCollapse={() => setOpen(false)} />
           </div>
           <RailPanes />
+          </div>
         </div>
         </>
       ) : (
