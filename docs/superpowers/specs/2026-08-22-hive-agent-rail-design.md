@@ -335,6 +335,7 @@ Three features shipped with their logic written, tested, and unreachable:
 | `setSizeForAnchor` | phase 2 | dragging the rail's edge did nothing |
 | `addTaskNote` | phase 4 | there was no way to write a note |
 | `broadcastRailSettings` | (absent) | flipping combined mode in one window never reached the other |
+| `.hub-hairline` | phase 1 | no element ever carried the class |
 
 Each had passing tests. Each was invisible to the test suite, because a unit
 test proves a function behaves, never that anything reaches it.
