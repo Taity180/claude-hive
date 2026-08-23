@@ -165,8 +165,12 @@ export function Rail() {
   // in the other direction the panel would not close again.
   //
   // Asking Rust whether the cursor is over the window is the same question with
-  // no accident in it, and it behaves the same however the rail is placed.
-  const hoverDrives = openOn === "hover" && !combined;
+  // no accident in it, and it behaves the same however the rail is placed —
+  // combined mode included. Collapsing the whole of Hive as the cursor leaves is
+  // a lot to happen by accident, so it is opt-in through the same Open-on
+  // setting rather than a mode of its own, and the grace period and the
+  // typing guard apply the same way.
+  const hoverDrives = openOn === "hover";
   const closeTimer = useRef<number | null>(null);
 
   const cancelClose = useCallback(() => {

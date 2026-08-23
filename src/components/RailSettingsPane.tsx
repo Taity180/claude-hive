@@ -447,7 +447,7 @@ export function RailSettingsPane() {
               title="Open on"
               hint={
                 combined
-                  ? "Hover does not apply while Hive is in the rail — it would collapse the whole window as your cursor left."
+                  ? "Hover applies in here too, so leaving collapses Hive to the nub."
                   : "Hover is faster; click avoids opening it by brushing past."
               }
             />

@@ -37,6 +37,23 @@ import { useHubStore } from "./stores/hubStore";
 
 const invokeMock = vi.mocked(invoke);
 
+/**
+ * Advance fake timers in steps, flushing microtasks between them.
+ *
+ * The cursor poll acts inside a promise continuation, so the close timer is only
+ * *scheduled* once that resolves. One long `advanceTimersByTime` runs every
+ * interval tick before any of those continuations, and the close never lands.
+ */
+async function tick(ms: number, step = 100) {
+  for (let elapsed = 0; elapsed < ms; elapsed += step) {
+    await act(async () => {
+      vi.advanceTimersByTime(step);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+  }
+}
+
 describe("Rail", () => {
   beforeEach(() => {
     localStorage.clear();
@@ -180,31 +197,42 @@ describe("Rail", () => {
     }
   });
 
-  it("leaves a click-to-open rail alone, and combined mode too", async () => {
+  it("leaves a click-to-open rail alone", async () => {
     vi.useFakeTimers();
     try {
       invokeMock.mockImplementation((cmd: string) =>
         cmd === "cursor_over_rail" ? Promise.resolve(false) : Promise.resolve(null)
       );
-
       useRailStore.setState({ open: true, openOn: "click", followCursor: false });
-      const clickMode = render(<Rail />);
+      render(<Rail />);
       await act(async () => {
-        vi.advanceTimersByTime(900);
+        await Promise.resolve();
         await Promise.resolve();
       });
+      await tick(900);
       expect(useRailStore.getState().open).toBe(true);
-      clickMode.unmount();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 
-      // Combined mode is the whole window; the cursor being elsewhere must not
-      // collapse Hive.
+  it("closes on hover in combined mode as well", async () => {
+    // Combined mode was exempt, on the grounds that collapsing the whole of Hive
+    // is a lot to happen from a cursor moving. It is the same Open-on setting
+    // either way, so the exemption was the surprise, not the closing.
+    vi.useFakeTimers();
+    try {
+      invokeMock.mockImplementation((cmd: string) =>
+        cmd === "cursor_over_rail" ? Promise.resolve(false) : Promise.resolve(null)
+      );
       useRailStore.setState({ open: true, openOn: "hover", combined: true });
       render(<Rail />);
       await act(async () => {
-        vi.advanceTimersByTime(900);
+        await Promise.resolve();
         await Promise.resolve();
       });
-      expect(useRailStore.getState().open).toBe(true);
+      await tick(900);
+      expect(useRailStore.getState().open).toBe(false);
     } finally {
       vi.useRealTimers();
     }

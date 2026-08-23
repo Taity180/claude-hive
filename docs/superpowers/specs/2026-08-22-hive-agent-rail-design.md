@@ -449,7 +449,9 @@ question, no accident, and it behaves identically however the rail is placed.
 The DOM `mouseenter` on the nub is kept only because it opens instantly when the
 event does arrive.
 
-Combined mode is exempt: hover-collapsing the whole of Hive as the cursor left
-would be unusable. The settings row says so, because an exemption nothing
-mentions reads as a bug — the same reason the follow-cursor row says it is
-overridden while the rail is pinned.
+Combined mode is **not** exempt. It was, on the grounds that collapsing the whole
+of Hive from a cursor moving away is a lot to happen by accident — but it is the
+same Open-on setting either way, so the exemption was the surprise rather than
+the closing. The grace period and the typing guard are what keep it from being
+twitchy. The settings row says what hover means in there, because a setting whose
+effect changes with another setting has to say so.
