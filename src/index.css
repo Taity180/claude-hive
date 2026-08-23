@@ -106,3 +106,9 @@ body,
     animation: none;
   }
 }
+
+/* A dimmed idle rail comes back to full strength when the pointer reaches it,
+   so it is always recoverable without going via the Hive window. */
+[data-testid="rail-nub"][data-dimmed="true"]:hover {
+  opacity: 1 !important;
+}

@@ -29,6 +29,8 @@ export function RailNub({ onOpen }: { onOpen: () => void }) {
   const tasks = useHubStore((s) => s.tasks);
   const restingForm = useRailStore((s) => s.restingForm);
   const anchor = useRailStore((s) => s.anchor);
+  const openOn = useRailStore((s) => s.openOn);
+  const hideWhenIdle = useRailStore((s) => s.hideWhenIdle);
 
   const present = STATUS_ORDER.filter((status) =>
     sessions.some((s) => s.status === status)
@@ -47,11 +49,19 @@ export function RailNub({ onOpen }: { onOpen: () => void }) {
   const isSliver = restingForm === "sliver";
   const dotSize = isSliver ? 5 : 7;
 
+  // Dimmed, not hidden. A rail that vanishes entirely is one the user cannot
+  // find again without going back to the Hive window.
+  const dimmed = hideWhenIdle && isIdle;
+
   return (
     <button
       type="button"
       data-testid="rail-nub"
       onClick={onOpen}
+      // Hover opens only when asked for: otherwise brushing past the screen
+      // edge would open the panel by accident.
+      onMouseEnter={openOn === "hover" ? onOpen : undefined}
+      data-dimmed={dimmed ? "true" : undefined}
       aria-label={
         unreadCount > 0 ? `Open Hive rail, ${unreadCount} unread` : "Open Hive rail"
       }
@@ -62,6 +72,8 @@ export function RailNub({ onOpen }: { onOpen: () => void }) {
         border: 0,
         borderRadius: 0,
         cursor: "pointer",
+        opacity: dimmed ? 0.35 : 1,
+        transition: "opacity 200ms ease",
       }}
     >
       {isIdle && (

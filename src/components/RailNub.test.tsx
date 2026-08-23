@@ -15,7 +15,7 @@ const sessions = [
 describe("RailNub", () => {
   beforeEach(() => {
     useHubStore.setState({ sessions, unreadSessions: new Set(["a", "b"]), agentPosts: [], tasks: [] });
-    useRailStore.setState({ restingForm: "nub" });
+    useRailStore.setState({ restingForm: "nub", openOn: "click", hideWhenIdle: false });
   });
 
   it("shows one dot per distinct status, not one per session", () => {
@@ -152,5 +152,50 @@ describe("RailNub", () => {
     });
     render(<RailNub onOpen={vi.fn()} />);
     expect(screen.queryByTestId("rail-idle-mark")).toBeNull();
+  });
+
+  it("opens on hover when set to hover", async () => {
+    useRailStore.setState({ openOn: "hover" });
+    const onOpen = vi.fn();
+    render(<RailNub onOpen={onOpen} />);
+    await userEvent.hover(screen.getByTestId("rail-nub"));
+    expect(onOpen).toHaveBeenCalled();
+  });
+
+  it("does not open on hover when set to click", async () => {
+    // Brushing past the screen edge must not open it.
+    useRailStore.setState({ openOn: "click" });
+    const onOpen = vi.fn();
+    render(<RailNub onOpen={onOpen} />);
+    await userEvent.hover(screen.getByTestId("rail-nub"));
+    expect(onOpen).not.toHaveBeenCalled();
+  });
+
+  it("fades out while idle if asked to", () => {
+    useRailStore.setState({ hideWhenIdle: true });
+    useHubStore.setState({ sessions: [], unreadSessions: new Set(), agentPosts: [], tasks: [] });
+    render(<RailNub onOpen={vi.fn()} />);
+    expect(screen.getByTestId("rail-nub")).toHaveAttribute("data-dimmed", "true");
+  });
+
+  it("stays solid when something needs the user, even with hide-when-idle on", () => {
+    useRailStore.setState({ hideWhenIdle: true });
+    useHubStore.setState({
+      sessions: [],
+      unreadSessions: new Set(),
+      agentPosts: [],
+      tasks: [
+        { id: "t1", externalId: null, agentId: null, title: "a", appId: null, sourceLabel: null, due: null, done: false, completedBy: null, completedAt: null, notes: [], createdAt: "", updatedAt: "" },
+      ],
+    });
+    render(<RailNub onOpen={vi.fn()} />);
+    expect(screen.getByTestId("rail-nub")).not.toHaveAttribute("data-dimmed");
+  });
+
+  it("does not dim when hide-when-idle is off", () => {
+    useRailStore.setState({ hideWhenIdle: false });
+    useHubStore.setState({ sessions: [], unreadSessions: new Set(), agentPosts: [], tasks: [] });
+    render(<RailNub onOpen={vi.fn()} />);
+    expect(screen.getByTestId("rail-nub")).not.toHaveAttribute("data-dimmed");
   });
 });
