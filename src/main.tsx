@@ -7,7 +7,12 @@ import "./index.css";
 
 // Hive and the Rail are two Tauri windows served from this one bundle, so the
 // label decides which root mounts.
-const Root = currentWindowLabel() === "rail" ? Rail : App;
+const windowLabel = currentWindowLabel();
+const Root = windowLabel === "rail" ? Rail : App;
+
+// Stylesheets need to know which window they are in: the rail's is transparent
+// and must not paint a page-level ground, Hive's is opaque and must.
+document.documentElement.dataset.window = windowLabel;
 
 class ErrorBoundary extends Component<
   { children: ReactNode },

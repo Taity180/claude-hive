@@ -48,6 +48,20 @@ body,
   background: #141414;
 }
 
+/*
+ * The rail paints its own grounds, at its own opacity.
+ *
+ * Hive's window is opaque and needs this ground, or the webview shows through
+ * as white. The rail's window is transparent, and a solid ground here sat behind
+ * every surface and made the opacity settings do nothing at all — the alpha was
+ * correct and there was simply nothing behind it to see.
+ */
+html[data-window="rail"],
+html[data-window="rail"] body,
+html[data-window="rail"] #root {
+  background: transparent;
+}
+
 /* Custom scrollbar — thin, dark, matches the UI */
 * {
   scrollbar-width: thin;
