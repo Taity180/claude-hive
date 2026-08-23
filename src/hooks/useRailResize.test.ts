@@ -1,79 +1,85 @@
-import { renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { renderHook } from "@testing-library/react";
 
-type Handler = (event: { payload: { width: number; height: number } }) => void;
+type ResizeHandler = (event: { payload: { width: number; height: number } }) => void;
 
-const { onResized, isVisible } = vi.hoisted(() => ({
-  onResized: vi.fn(),
-  isVisible: vi.fn(),
-}));
+const { onResized, handlers } = vi.hoisted(() => {
+  const handlers: ResizeHandler[] = [];
+  return {
+    handlers,
+    onResized: vi.fn((handler: ResizeHandler) => {
+      handlers.push(handler);
+      return Promise.resolve(() => {});
+    }),
+  };
+});
 vi.mock("@tauri-apps/api/window", () => ({
-  getCurrentWindow: () => ({ onResized, isVisible }),
+  getCurrentWindow: () => ({ onResized }),
 }));
+vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn().mockResolvedValue(null) }));
 
 import { useRailResize } from "./useRailResize";
 import { useRailStore } from "../stores/railStore";
+import { placeRail, resetPlacementGuard } from "../rail/placement";
 
-let fire: Handler = () => {};
+const resize = (width: number, height: number) => {
+  for (const handler of handlers) handler({ payload: { width, height } });
+};
 
 describe("useRailResize", () => {
   beforeEach(() => {
+    handlers.length = 0;
     localStorage.clear();
+    resetPlacementGuard();
     useRailStore.setState(useRailStore.getInitialState(), true);
-    onResized.mockReset().mockImplementation((handler: Handler) => {
-      fire = handler;
-      return Promise.resolve(() => {});
-    });
-    isVisible.mockReset().mockResolvedValue(true);
+    useRailStore.setState({ open: true, anchor: "right" });
   });
 
-  it("persists a drag against the current anchor", async () => {
-    useRailStore.setState({ anchor: "right", open: true });
+  it("records a size the user dragged", async () => {
     renderHook(() => useRailResize());
-    await waitFor(() => expect(onResized).toHaveBeenCalled());
+    await vi.waitFor(() => expect(handlers.length).toBe(1));
 
-    fire({ payload: { width: 420, height: 700 } });
-    await waitFor(() =>
-      expect(useRailStore.getState().sizes.right).toEqual([420, 700])
+    resize(600, 800);
+    expect(useRailStore.getState().sizes.right).toEqual([600, 800]);
+  });
+
+  it("ignores the resize its own placement caused", async () => {
+    // The open animation reports one resize per frame. Recording those as the
+    // user's dragged size ratcheted the panel down a little on every open.
+    renderHook(() => useRailResize());
+    await vi.waitFor(() => expect(handlers.length).toBe(1));
+
+    void placeRail(
+      { anchor: "right", width: 520, height: 660, offset: 14, monitor: null },
+      true
     );
-  });
+    resize(178, 300);
+    resize(340, 480);
+    resize(520, 660);
 
-  it("keeps each anchor's size separate", async () => {
-    useRailStore.setState({ anchor: "right", open: true });
-    renderHook(() => useRailResize());
-    await waitFor(() => expect(onResized).toHaveBeenCalled());
-    fire({ payload: { width: 420, height: 700 } });
-    await waitFor(() => expect(useRailStore.getState().sizes.right).toBeDefined());
-
-    useRailStore.setState({ anchor: "bottom" });
-    fire({ payload: { width: 900, height: 260 } });
-    await waitFor(() =>
-      expect(useRailStore.getState().sizes.bottom).toEqual([900, 260])
-    );
-    // A right-edge rail wants tall and narrow, a bottom one wide and short, so
-    // one shared size would be wrong for half the anchors.
-    expect(useRailStore.getState().sizes.right).toEqual([420, 700]);
-  });
-
-  it("ignores resizes while collapsed, which are the nub's own size", async () => {
-    // The nub is 32x140 and set by Rust; recording that as the user's remembered
-    // panel size would shrink the panel to a strip on next open.
-    useRailStore.setState({ anchor: "right", open: false });
-    renderHook(() => useRailResize());
-    await waitFor(() => expect(onResized).toHaveBeenCalled());
-
-    fire({ payload: { width: 32, height: 140 } });
-    await new Promise((resolve) => setTimeout(resolve, 10));
     expect(useRailStore.getState().sizes.right).toBeUndefined();
   });
 
-  it("ignores an implausibly small size", async () => {
-    useRailStore.setState({ anchor: "right", open: true });
+  it("records again once the placement window has passed", async () => {
     renderHook(() => useRailResize());
-    await waitFor(() => expect(onResized).toHaveBeenCalled());
+    await vi.waitFor(() => expect(handlers.length).toBe(1));
 
-    fire({ payload: { width: 20, height: 30 } });
-    await new Promise((resolve) => setTimeout(resolve, 10));
+    void placeRail(
+      { anchor: "right", width: 520, height: 660, offset: 14, monitor: null },
+      true
+    );
+    resetPlacementGuard();
+
+    resize(640, 720);
+    expect(useRailStore.getState().sizes.right).toEqual([640, 720]);
+  });
+
+  it("ignores a resize while the rail is resting", async () => {
+    useRailStore.setState({ open: false });
+    renderHook(() => useRailResize());
+    await vi.waitFor(() => expect(handlers.length).toBe(1));
+
+    resize(600, 800);
     expect(useRailStore.getState().sizes.right).toBeUndefined();
   });
 });

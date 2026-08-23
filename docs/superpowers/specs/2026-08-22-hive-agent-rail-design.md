@@ -337,6 +337,13 @@ Three features shipped with their logic written, tested, and unreachable:
 | `broadcastRailSettings` | (absent) | flipping combined mode in one window never reached the other |
 | `.hub-hairline` | phase 1 | no element ever carried the class |
 
+And its mirror image — something wired to *too much*. `useRailResize` recorded
+every resize the OS reported as the size the user had dragged. Every placement
+reports one; the open animation reports one per frame. So each open recorded an
+intermediate frame as the remembered size, started the next open from that
+smaller size, and ratcheted the panel down towards nothing. Placement and the
+"this resize is ours" window now live in one module, so they cannot drift apart.
+
 Each had passing tests. Each was invisible to the test suite, because a unit
 test proves a function behaves, never that anything reaches it.
 

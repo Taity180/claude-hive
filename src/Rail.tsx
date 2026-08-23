@@ -15,6 +15,7 @@ import { useUsage } from "./hooks/useUsage";
 import { useRailResize } from "./hooks/useRailResize";
 import { useRailSettingsSync } from "./hooks/useRailSettingsSync";
 import { openRail } from "./rail/openRail";
+import { placeRail } from "./rail/placement";
 
 /**
  * Grace period before a hover-opened rail collapses again.
@@ -101,10 +102,11 @@ export function Rail() {
     const transition = wasOpen.current !== open;
     wasOpen.current = open;
 
-    const args = { anchor, width, height, offset, monitor: pinnedMonitor };
-    invoke(transition ? "animate_rail" : "place_rail", args).catch((err) => {
-      console.error("[hive] placing the rail failed:", err);
-    });
+    placeRail({ anchor, width, height, offset, monitor: pinnedMonitor }, transition).catch(
+      (err) => {
+        console.error("[hive] placing the rail failed:", err);
+      }
+    );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [onScreen, open, combined, anchor, offset, restingForm, pinnedMonitor]);
 
@@ -137,9 +139,11 @@ export function Rail() {
     if (!onScreen || !followCursor || !canFollow) return;
     const [width, height] = open ? currentSize() : nubSize(anchor, restingForm);
     const id = window.setInterval(() => {
-      invoke("place_rail", { anchor, width, height, offset, monitor: null }).catch(() => {
+      // Never animated: four animations a second would be a permanent slow
+      // drift rather than a move, and crossing monitors should be instant.
+      placeRail({ anchor, width, height, offset, monitor: null }).catch(() => {
         // A transient failure during a display change should not kill the
-        // interval; place_rail's own failures are logged by the effect above.
+        // interval; placement failures are logged by the effect above.
       });
     }, 250);
     return () => window.clearInterval(id);

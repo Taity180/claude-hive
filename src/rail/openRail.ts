@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { nubSize, useRailStore } from "../stores/railStore";
+import { markPlacement } from "./placement";
 
 /**
  * Show the rail, telling Rust where to put it first.
@@ -18,6 +19,8 @@ export function openRail(): Promise<void> {
   // resting, as the nub.
   const [width, height] = combined ? currentSize() : nubSize(anchor, restingForm);
 
+  // Showing places the window, which reports a resize we must not record.
+  markPlacement();
   return invoke("open_rail", {
     anchor,
     width,

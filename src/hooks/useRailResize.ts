@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { useRailStore } from "../stores/railStore";
+import { isOurResize } from "../rail/placement";
 
 /**
  * Below this, a reported size is not a panel the user dragged.
@@ -30,6 +31,12 @@ export function useRailResize() {
         const unlisten = await getCurrentWindow().onResized(({ payload }) => {
           // Read live from the store rather than closing over state: the anchor
           // and open flag both change while this listener is attached.
+          // Ours, not theirs. Every placement reports a resize, and the open
+          // animation reports one per frame; recording those as the user's
+          // dragged size ratcheted the panel down a little on every open.
+          if (isOurResize()) return;
+
+
           const { open, anchor, setSizeForAnchor } = useRailStore.getState();
           if (!open) return;
 
