@@ -445,7 +445,11 @@ export function RailSettingsPane() {
           <Row>
             <Label
               title="Open on"
-              hint="Hover is faster; click avoids opening it by brushing past."
+              hint={
+                combined
+                  ? "Hover does not apply while Hive is in the rail — it would collapse the whole window as your cursor left."
+                  : "Hover is faster; click avoids opening it by brushing past."
+              }
             />
             <Segmented
               options={[

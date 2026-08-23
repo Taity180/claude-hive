@@ -186,4 +186,18 @@ describe("RailSettingsPane", () => {
     render(<RailSettingsPane />);
     expect(screen.getByText("75%")).toBeInTheDocument();
   });
+
+  it("says hover does not apply while Hive is in the rail", () => {
+    // Combined mode is exempt from hover-closing on purpose — the whole window
+    // would collapse as the cursor left — but the row said nothing, so the
+    // exemption read as a bug.
+    useRailStore.setState({ combined: true });
+    render(<RailSettingsPane />);
+    expect(screen.getByText(/Hover does not apply while Hive is in the rail/)).toBeInTheDocument();
+  });
+
+  it("gives the normal hover hint when Hive is not in the rail", () => {
+    render(<RailSettingsPane />);
+    expect(screen.getByText(/Hover is faster/)).toBeInTheDocument();
+  });
 });

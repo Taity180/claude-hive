@@ -448,3 +448,8 @@ and the frontend polls it every 200ms whenever hover or cursor-follow is on. Sam
 question, no accident, and it behaves identically however the rail is placed.
 The DOM `mouseenter` on the nub is kept only because it opens instantly when the
 event does arrive.
+
+Combined mode is exempt: hover-collapsing the whole of Hive as the cursor left
+would be unusable. The settings row says so, because an exemption nothing
+mentions reads as a bug — the same reason the follow-cursor row says it is
+overridden while the rail is pinned.
