@@ -84,6 +84,8 @@ pub fn create_hidden(app: &AppHandle) {
         }
     };
 
+    frost(&rail);
+
     // Park it on an edge now, so the first frame after `show()` is already in
     // the right place rather than jumping once the rail's JS loads.
     match position_rail(app, &rail, DEFAULT_ANCHOR, DEFAULT_NUB, DEFAULT_OFFSET, None) {
@@ -248,6 +250,28 @@ pub fn place_rail(
     };
     position_rail(&app, &rail, anchor, (width, height), offset, monitor)
 }
+
+/// Blur what is behind the rail, so lowering its opacity frosts rather than
+/// just fades.
+///
+/// A transparent window on Windows shows the desktop through unchanged — CSS
+/// `backdrop-filter` cannot help, because it only blurs what is inside the page.
+/// The blur has to come from the compositor.
+///
+/// Best-effort by design: acrylic needs Windows 10 1803 or later, and a machine
+/// that refuses it should get a plain translucent rail rather than no rail.
+#[cfg(target_os = "windows")]
+fn frost(rail: &tauri::WebviewWindow) {
+    // Tinted almost black at a low alpha: the surfaces above carry the colour,
+    // and this only has to darken and blur what shows through them.
+    match window_vibrancy::apply_acrylic(rail, Some((10, 10, 12, 90))) {
+        Ok(()) => diag("frost: acrylic applied"),
+        Err(e) => diag(&format!("frost: acrylic unavailable ({e}), staying plain")),
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
+fn frost(_rail: &tauri::WebviewWindow) {}
 
 /// Is the cursor over the rail right now?
 ///

@@ -1,5 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useState } from "react";
+import { useTheme } from "../hooks/useTheme";
+import { ThemePicker } from "./ThemePicker";
 import { useHubStore } from "../stores/hubStore";
 import { MIN_OPACITY, sizeKey, useRailStore, type AnchorId } from "../stores/railStore";
 import { AppIcon } from "./AppIcon";
@@ -223,7 +225,15 @@ function monitorLabel(m: MonitorInfo): string {
   return m.primary ? `Screen ${m.index + 1} — ${size}, primary` : `Screen ${m.index + 1} — ${size}`;
 }
 
-export function RailSettingsPane() {
+/** Which group of settings to show. The sidebar addresses each as a child pane. */
+export type SettingsSection =
+  | "position"
+  | "behaviour"
+  | "appearance"
+  | "muted"
+  | "setup";
+
+export function RailSettingsPane({ section }: { section: SettingsSection }) {
   const anchor = useRailStore((s) => s.anchor);
   const offset = useRailStore((s) => s.offset);
   const restingForm = useRailStore((s) => s.restingForm);
@@ -249,6 +259,9 @@ export function RailSettingsPane() {
   const setPinnedMonitor = useRailStore((s) => s.setPinnedMonitor);
   const setPanelOpacity = useRailStore((s) => s.setPanelOpacity);
   const setSidebarOpacity = useRailStore((s) => s.setSidebarOpacity);
+  // The theme is one palette for both windows, so it belongs with the rail's own
+  // appearance settings rather than in a separate Hive-only screen.
+  const { theme, setTheme } = useTheme();
 
   // Asked for once on mount. Hot-plugging a monitor mid-session is rare enough
   // that reopening the pane to see it is a fair trade for not polling the OS.
@@ -277,6 +290,7 @@ export function RailSettingsPane() {
 
   return (
     <div className="flex-1 overflow-y-auto p-2 flex flex-col gap-3">
+      {section === "position" && (
       <section className="flex flex-col gap-1.5">
         <SectionTitle>Where it sits</SectionTitle>
         <RowGroup>
@@ -426,6 +440,9 @@ export function RailSettingsPane() {
         </RowGroup>
       </section>
 
+      )}
+
+      {section === "behaviour" && (
       <section className="flex flex-col gap-1.5">
         <SectionTitle>Behaviour</SectionTitle>
         <RowGroup>
@@ -524,6 +541,9 @@ export function RailSettingsPane() {
         </RowGroup>
       </section>
 
+      )}
+
+      {section === "appearance" && (
       <section className="flex flex-col gap-1.5">
         <SectionTitle>Appearance</SectionTitle>
         <RowGroup>
@@ -541,6 +561,16 @@ export function RailSettingsPane() {
 
           <Row>
             <Label
+              title="Theme"
+              hint="Applies to Hive and the rail — they share one palette."
+            />
+            <span className="shrink-0 max-w-[55%]">
+              <ThemePicker currentThemeId={theme.id} onSelect={setTheme} />
+            </span>
+          </Row>
+
+          <Row>
+            <Label
               title="Sidebar opacity"
               hint="Set separately, so the sidebar can stay solid over a see-through panel."
             />
@@ -553,6 +583,9 @@ export function RailSettingsPane() {
         </RowGroup>
       </section>
 
+      )}
+
+      {section === "muted" && (
       <section className="flex flex-col gap-1.5">
         <SectionTitle>Muted apps</SectionTitle>
 
@@ -585,6 +618,28 @@ export function RailSettingsPane() {
           </Row>
         ))}
       </section>
+      )}
+
+      {section === "setup" && (
+        <section className="flex flex-col gap-1.5">
+          <SectionTitle>Plugin setup</SectionTitle>
+          <span className="text-[11px] px-2" style={{ color: "var(--hub-text-muted)" }}>
+            In any Claude Code session, run:
+          </span>
+          <code
+            className="rounded-lg px-2.5 py-2 text-[10.5px] leading-relaxed"
+            style={{
+              background: "var(--hub-surface)",
+              color: "var(--hub-text)",
+              fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+            }}
+          >
+            /plugin marketplace add Taity180/claude-hive
+            <br />
+            /plugin install claude-hive@Taity180-claude-hive
+          </code>
+        </section>
+      )}
     </div>
   );
 }

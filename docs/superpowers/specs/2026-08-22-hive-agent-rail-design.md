@@ -369,8 +369,8 @@ None blocking. Two worth revisiting once phase 3 is real:
   (`AgentQuestionStore`). The session store is keyed by session id and its pending questions feed the session
   UI, which would go looking for a session that an agent id does not name. Same shape, separate keyspace, and
   the same one-pending-question-per-asker rule.
-- Whether feed history should persist alongside tasks. Currently no; revisit if the Rail proves useful as a log
-  rather than a glance.
+- Whether feed history should persist alongside tasks. Currently no — the last 1000 posts, in memory. Paged at
+  50 rather than scrolled, which is what a thousand rows needs to be usable at all.
 
 A third habit, from combined mode: **a setting that spans two windows needs a
 transport.** Hive and the Rail are separate WebView2 instances, so they hold
@@ -455,3 +455,25 @@ same Open-on setting either way, so the exemption was the surprise rather than
 the closing. The grace period and the typing guard are what keep it from being
 twitchy. The settings row says what hover means in there, because a setting whose
 effect changes with another setting has to say so.
+
+### Settings, and where Hive's went
+
+The rail's settings are five child panes under one sidebar row — Position,
+Behaviour, Appearance, Muted apps, Plugin setup — rather than five permanent rows
+or one long scroll. The row expands when it is the pane and marks itself active
+for any of its children.
+
+**Hive's own settings moved in.** The theme is one palette for both windows, so it
+belongs beside the rail's opacity settings rather than in a Hive-only screen; the
+plugin-install snippet became the Plugin setup child. Hive's Settings view is
+kept, because it is the only way to reach any of this with the rail closed, and
+both edit the same store.
+
+### Frosted, not just faded
+
+Lowering the opacity showed the desktop through unchanged: CSS `backdrop-filter`
+only blurs what is inside the page, so the blur has to come from the compositor.
+`window-vibrancy` applies acrylic to the rail window at creation. Best-effort —
+acrylic needs Windows 10 1803 or later, and a machine that refuses it gets a
+plain translucent rail rather than no rail, which the diagnostic log records
+either way.

@@ -31,6 +31,7 @@ reqwest = { version = "0.12", features = ["blocking", "json"] }
 tungstenite = "0.28"
 dirs = "6"
 image = "0.25"
+window-vibrancy = "0.8.0"
 
 [target.'cfg(windows)'.dependencies]
 winvd = "0.0.48"

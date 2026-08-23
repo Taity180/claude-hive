@@ -138,4 +138,42 @@ describe("RailPanes", () => {
     expect(useHubStore.getState().viewState).toBe("expanded");
     expect(screen.queryByTestId("hive-pane-back")).toBeNull();
   });
+
+  it("expands Settings into its children when it is the pane", async () => {
+    render(<RailPanes />);
+    expect(screen.queryByText("Appearance")).toBeNull();
+
+    await userEvent.click(screen.getByRole("button", { name: /^Settings/ }));
+    for (const child of ["Position", "Behaviour", "Appearance", "Muted apps", "Plugin setup"]) {
+      expect(screen.getByRole("button", { name: child })).toBeInTheDocument();
+    }
+    // Settings opens on the first child rather than a blank pane.
+    expect(screen.getAllByTestId("anchor-option").length).toBeGreaterThan(0);
+  });
+
+  it("keeps Settings marked while one of its children is showing", async () => {
+    render(<RailPanes />);
+    await userEvent.click(screen.getByRole("button", { name: /^Settings/ }));
+    await userEvent.click(screen.getByRole("button", { name: "Appearance" }));
+
+    const parent = screen.getByRole("button", { name: /^Settings/ });
+    expect(parent).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByLabelText("Window opacity")).toBeInTheDocument();
+  });
+
+  it("carries Hive's theme in the rail's appearance settings", async () => {
+    // It was a Hive-only screen; the palette is shared by both windows, so it
+    // belongs with the rail's own appearance settings.
+    render(<RailPanes />);
+    await userEvent.click(screen.getByRole("button", { name: /^Settings/ }));
+    await userEvent.click(screen.getByRole("button", { name: "Appearance" }));
+    expect(screen.getByText("Theme")).toBeInTheDocument();
+  });
+
+  it("collapses the children again when another pane is chosen", async () => {
+    render(<RailPanes />);
+    await userEvent.click(screen.getByRole("button", { name: /^Settings/ }));
+    await userEvent.click(screen.getByRole("button", { name: /^Tasks/ }));
+    expect(screen.queryByRole("button", { name: "Appearance" })).toBeNull();
+  });
 });

@@ -1,4 +1,5 @@
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it } from "vitest";
 import { RailPanel } from "./RailPanel";
 import { useHubStore } from "../stores/hubStore";
@@ -130,5 +131,44 @@ describe("RailPanel", () => {
   it("shows the apps bar even with no apps declared", () => {
     render(<RailPanel />);
     expect(screen.getByText(/no apps connected/i)).toBeInTheDocument();
+  });
+
+  it("shows no pager while everything fits on one page", () => {
+    render(<RailPanel />);
+    expect(screen.queryByTestId("feed-page")).toBeNull();
+  });
+
+  it("pages a long feed at fifty a page", async () => {
+    // The store keeps the last thousand posts, which is a scroll nobody
+    // finishes.
+    useHubStore.setState({
+      sessions: [],
+      unreadSessions: new Set(),
+      agentApps: [],
+      agentPosts: Array.from({ length: 120 }, (_, i) => ({
+        id: `p${i}`,
+        agentId: "a1",
+        agentName: "Grok",
+        appId: null,
+        content: `post ${i}`,
+        postType: "info",
+        timestamp: new Date(Date.UTC(2026, 7, 23, 12, 0, i)).toISOString(),
+        read: true,
+      })) as never,
+    });
+
+    render(<RailPanel />);
+    expect(screen.getAllByTestId("rail-row")).toHaveLength(50);
+    expect(screen.getByTestId("feed-page")).toHaveTextContent("1 of 3");
+    expect(screen.getByTestId("feed-prev")).toBeDisabled();
+
+    await userEvent.click(screen.getByTestId("feed-next"));
+    expect(screen.getByTestId("feed-page")).toHaveTextContent("2 of 3");
+    expect(screen.getByTestId("feed-prev")).not.toBeDisabled();
+
+    await userEvent.click(screen.getByTestId("feed-next"));
+    expect(screen.getByTestId("feed-page")).toHaveTextContent("3 of 3");
+    expect(screen.getAllByTestId("rail-row")).toHaveLength(20);
+    expect(screen.getByTestId("feed-next")).toBeDisabled();
   });
 });

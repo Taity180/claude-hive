@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useHubStore } from "../stores/hubStore";
 import { useRailStore } from "../stores/railStore";
 import { buildFeed } from "../feed/buildFeed";
+import { paginate } from "../feed/paginate";
 import { AgentPostRow } from "./AgentPostRow";
 import { AgentQuestionRow } from "./AgentQuestionRow";
 import { ConnectedAppsBar } from "./ConnectedAppsBar";
@@ -115,16 +116,25 @@ export function RailPanel({ embedded, selectedApp: controlled, onSelectApp }: Ra
   const agentQuestions = useHubStore((s) => s.agentQuestions);
   const mutedApps = useRailStore((s) => s.mutedApps);
   const [ownSelectedApp, setOwnSelectedApp] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
   const selectedApp = onSelectApp ? (controlled ?? null) : ownSelectedApp;
   const setSelectedApp = onSelectApp ?? setOwnSelectedApp;
 
+  // Page 3 of Gmail is not page 3 of everything, so a filter change starts over.
+  useEffect(() => {
+    setPage(1);
+  }, [selectedApp]);
+
   // Ordering lives in buildFeed so it can be tested without rendering.
-  const rows = buildFeed(sessions, agentPosts, {
+  const allRows = buildFeed(sessions, agentPosts, {
     pinAttention: true,
     appId: selectedApp,
     mutedApps,
     questions: agentQuestions,
   });
+  // Paged rather than one long scroll: the store keeps the last thousand posts,
+  // which is a scroll nobody finishes.
+  const { rows, page: current, pages } = paginate(allRows, page);
 
   return (
     <div className="flex flex-col h-full">
@@ -164,6 +174,53 @@ export function RailPanel({ embedded, selectedApp: controlled, onSelectApp }: Ra
           )
         )}
       </div>
+
+      {pages > 1 && (
+        <div
+          className="shrink-0 flex items-center justify-between px-2 py-1"
+          style={{ borderTop: "1px solid var(--hub-hair)" }}
+        >
+          <button
+            type="button"
+            data-testid="feed-prev"
+            disabled={current <= 1}
+            onClick={() => setPage(current - 1)}
+            className="text-[10.5px] rounded px-1.5 py-0.5"
+            style={{
+              background: "var(--hub-surface)",
+              border: 0,
+              color: "var(--hub-text-muted)",
+              cursor: current <= 1 ? "default" : "pointer",
+              opacity: current <= 1 ? 0.4 : 1,
+            }}
+          >
+            ← Newer
+          </button>
+          <span
+            data-testid="feed-page"
+            className="text-[10.5px] tabular-nums"
+            style={{ color: "var(--hub-text-dim)" }}
+          >
+            {current} of {pages}
+          </span>
+          <button
+            type="button"
+            data-testid="feed-next"
+            disabled={current >= pages}
+            onClick={() => setPage(current + 1)}
+            className="text-[10.5px] rounded px-1.5 py-0.5"
+            style={{
+              background: "var(--hub-surface)",
+              border: 0,
+              color: "var(--hub-text-muted)",
+              cursor: current >= pages ? "default" : "pointer",
+              opacity: current >= pages ? 0.4 : 1,
+            }}
+          >
+            Older →
+          </button>
+        </div>
+      )}
 
       <RailComposer agents={agents} />
     </div>

@@ -3,14 +3,37 @@ import { useHubStore } from "../stores/hubStore";
 import { RailPanel } from "./RailPanel";
 import { TasksPane } from "./TasksPane";
 import { AgentsPane } from "./AgentsPane";
-import { RailSettingsPane } from "./RailSettingsPane";
+import { RailSettingsPane, type SettingsSection } from "./RailSettingsPane";
 import { ExpandedDashboard } from "./ExpandedDashboard";
 import { SessionDetail } from "./SessionDetail";
 import { Settings } from "./Settings";
 import { ConnectedAppsBar } from "./ConnectedAppsBar";
 import { useRailStore, withOpacity } from "../stores/railStore";
 
-type PaneId = "sessions" | "activity" | "tasks" | "agents" | "settings";
+type PaneId =
+  | "sessions"
+  | "activity"
+  | "tasks"
+  | "agents"
+  | `settings:${SettingsSection}`;
+
+/** The settings children, in the order they read. */
+const SETTINGS_CHILDREN: { id: PaneId; label: string }[] = [
+  { id: "settings:position", label: "Position" },
+  { id: "settings:behaviour", label: "Behaviour" },
+  { id: "settings:appearance", label: "Appearance" },
+  { id: "settings:muted", label: "Muted apps" },
+  { id: "settings:setup", label: "Plugin setup" },
+];
+
+const DEFAULT_SETTINGS_PANE: PaneId = "settings:position";
+
+/** The section a settings pane id addresses. */
+function sectionOf(pane: PaneId): SettingsSection | null {
+  return pane.startsWith("settings:")
+    ? (pane.slice("settings:".length) as SettingsSection)
+    : null;
+}
 
 interface PaneGroup {
   group: string;
@@ -24,7 +47,7 @@ const RAIL_GROUP: PaneGroup = {
     { id: "activity", label: "All activity", icon: "≡" },
     { id: "tasks", label: "Tasks", icon: "✓" },
     { id: "agents", label: "Agents", icon: "◇" },
-    { id: "settings", label: "Settings", icon: "⚙" },
+    { id: DEFAULT_SETTINGS_PANE, label: "Settings", icon: "⚙" },
   ],
 };
 
@@ -104,6 +127,7 @@ export function RailPanes() {
   // sidebar reads better at every width the rail is ever given.
   const groups = combined ? [HIVE_GROUP, RAIL_GROUP] : [RAIL_GROUP];
   const [pane, setPane] = useState<PaneId>(combined ? "sessions" : "activity");
+  const section = sectionOf(pane);
   // The connector strip sits above every pane here rather than inside the feed,
   // so the connected apps stay in view whichever pane is showing. Picking one
   // still filters the feed, so the selection has to live above both.
@@ -137,6 +161,9 @@ export function RailPanes() {
   // Detaching removes the Sessions pane; leaving it selected would show a blank
   // content area with no sidebar row to explain it.
   const active: PaneId = !combined && pane === "sessions" ? "activity" : pane;
+  // Settings is a group of five things; a parent row that expands keeps them
+  // reachable in one click without five permanent rows in the sidebar.
+  const settingsOpen = section !== null;
 
   const selectApp = (appId: string | null) => {
     setSelectedApp(appId);
@@ -168,7 +195,10 @@ export function RailPanes() {
             </span>
             {items.map((item) => {
               const count = counts[item.id] ?? 0;
-              const isActive = active === item.id;
+              const isActive =
+                item.id === DEFAULT_SETTINGS_PANE
+                  ? sectionOf(active) !== null
+                  : active === item.id;
               const isHot = hot[item.id] === true && count > 0;
               return (
                 <button
@@ -225,6 +255,36 @@ export function RailPanes() {
                 </button>
               );
             })}
+            {items.some((item) => item.id === DEFAULT_SETTINGS_PANE) &&
+              settingsOpen &&
+              SETTINGS_CHILDREN.map((child) => (
+                <button
+                  key={child.id}
+                  type="button"
+                  data-testid="sidebar-child"
+                  aria-pressed={active === child.id}
+                  onClick={() => setPane(child.id)}
+                  className="flex items-center w-full text-left rounded-md py-[3px]"
+                  style={{
+                    border: 0,
+                    cursor: "pointer",
+                    // Indented to the parent's label rather than its icon, so
+                    // the group reads as one thing.
+                    paddingLeft: 32,
+                    paddingRight: 8,
+                    fontSize: 11.5,
+                    fontWeight: active === child.id ? 600 : 500,
+                    background:
+                      active === child.id ? "var(--hub-surface)" : "transparent",
+                    color:
+                      active === child.id
+                        ? "var(--hub-text)"
+                        : "var(--hub-text-dim)",
+                  }}
+                >
+                  {child.label}
+                </button>
+              ))}
           </div>
         ))}
       </div>
@@ -238,7 +298,7 @@ export function RailPanes() {
         )}
         {active === "tasks" && <TasksPane />}
         {active === "agents" && <AgentsPane />}
-        {active === "settings" && <RailSettingsPane />}
+        {sectionOf(active) && <RailSettingsPane section={sectionOf(active)!} />}
       </div>
     </div>
   );
