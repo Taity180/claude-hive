@@ -162,7 +162,7 @@ export type SessionViewMode = "grid" | "list" | "detailed";
 // Shapes mirror src-tauri/src/models/agent.rs. Verified against a live
 // server in src-tauri/tests/agent_ingest.md.
 
-export type AppHealth = "ok" | "degraded" | "down";
+export type AppHealth = "ok" | "degraded" | "down" | "unknown";
 
 /** An external MCP-speaking agent. Not a Claude Code session. */
 export interface Agent {

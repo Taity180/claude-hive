@@ -54,13 +54,17 @@ describe("Rail", () => {
 
   it("rests as a nub until opened", () => {
     render(<Rail />);
-    expect(screen.queryByTestId("pane-feed")).toBeNull();
+    expect(screen.getByTestId("rail-nub")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^All activity/ })).toBeNull();
   });
 
-  it("shows the four rail panes when opened on its own", () => {
+  it("opens into the sidebar layout, with no Hive group until it moves in", () => {
+    // The rail used to carry a row of four tabs and combined mode a sidebar;
+    // one layout for both, and Hive's group is the only difference.
     useRailStore.setState({ open: true });
     render(<Rail />);
-    expect(screen.getByTestId("pane-feed")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^All activity/ })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^Sessions/ })).toBeNull();
     expect(screen.queryByTestId("detach-hive")).toBeNull();
   });
 
@@ -72,7 +76,6 @@ describe("Rail", () => {
     render(<Rail />);
     expect(screen.getByRole("button", { name: /^Sessions/ })).toBeInTheDocument();
     expect(screen.getByTestId("detach-hive")).toBeInTheDocument();
-    expect(screen.queryByTestId("pane-feed")).toBeNull();
   });
 
   it("carries Hive's token usage in the combined title bar", () => {

@@ -1,17 +1,38 @@
 use std::collections::HashMap;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use chrono::Utc;
+use serde::{Deserialize, Serialize};
 
 use crate::models::{Agent, AgentApp, AppHealth};
+
+const FILE_NAME: &str = "agents.json";
+
+/// What is written to disk. A snapshot, not an event log.
+#[derive(Debug, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct Persisted {
+    agents: Vec<Agent>,
+    apps: HashMap<String, Vec<AgentApp>>,
+}
 
 /// Agents and the apps they have declared. Mirrors `SessionRegistry`'s shape so
 /// the two read the same way; kept separate because an agent has no working
 /// directory, terminal handle, or user-driven status.
+///
+/// Persisted, unlike sessions. A session is alive or it is not — a dead one has
+/// nothing to show. An agent's declared apps are a standing fact, and losing
+/// them on restart left the connector bar empty until every agent happened to
+/// call in again, which reads as "nothing is connected" rather than "nobody has
+/// checked in yet". `enabled` has to survive for the same reason: muting an
+/// agent should not quietly undo itself.
 #[derive(Debug, Clone)]
 pub struct AgentRegistry {
     agents: Arc<RwLock<HashMap<String, Agent>>>,
     apps: Arc<RwLock<HashMap<String, Vec<AgentApp>>>>,
+    /// None for the in-memory registry the tests use.
+    path: Option<Arc<PathBuf>>,
 }
 
 impl AgentRegistry {
@@ -19,6 +40,72 @@ impl AgentRegistry {
         Self {
             agents: Arc::new(RwLock::new(HashMap::new())),
             apps: Arc::new(RwLock::new(HashMap::new())),
+            path: None,
+        }
+    }
+
+    /// Load what the last run declared, or start empty.
+    pub fn load_or_create(dir: &Path) -> Self {
+        let path = dir.join(FILE_NAME);
+        let loaded: Persisted = std::fs::read_to_string(&path)
+            .ok()
+            .and_then(|raw| serde_json::from_str(&raw).ok())
+            // Unreadable or corrupt: start empty rather than refuse to boot.
+            .unwrap_or_default();
+
+        let agents = loaded
+            .agents
+            .into_iter()
+            .map(|a| (a.id.clone(), a))
+            .collect();
+        // Nothing has reported in yet this run, so no app's health is known.
+        let apps = loaded
+            .apps
+            .into_iter()
+            .map(|(agent_id, apps)| {
+                let apps = apps
+                    .into_iter()
+                    .map(|app| AgentApp { health: AppHealth::Unknown, ..app })
+                    .collect();
+                (agent_id, apps)
+            })
+            .collect();
+
+        Self {
+            agents: Arc::new(RwLock::new(agents)),
+            apps: Arc::new(RwLock::new(apps)),
+            path: Some(Arc::new(path)),
+        }
+    }
+
+    /// Write the whole snapshot. Called after every mutation but `touch`.
+    ///
+    /// `touch` is deliberately excluded: it fires on every single tool call, and
+    /// a disk write per call to keep `lastSeen` to the second is not a trade
+    /// worth making. The value on disk is from the agent's last handshake.
+    async fn persist(&self) {
+        let Some(path) = self.path.as_ref() else {
+            return;
+        };
+
+        let snapshot = Persisted {
+            agents: self.agents.read().await.values().cloned().collect(),
+            apps: self.apps.read().await.clone(),
+        };
+        let json = match serde_json::to_string_pretty(&snapshot) {
+            Ok(json) => json,
+            Err(e) => {
+                tracing::error!("agents: could not serialise: {e}");
+                return;
+            }
+        };
+        if let Some(parent) = path.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        if let Err(e) = std::fs::write(path.as_path(), json) {
+            // Losing the write is bad; taking the dashboard down with it is
+            // worse. The in-memory registry stays correct for this session.
+            tracing::error!("agents: could not write {}: {e}", path.display());
         }
     }
 
@@ -42,8 +129,11 @@ impl AgentRegistry {
                 connected_at: now,
                 last_seen: now,
                 enabled: true,
-            });
-        agent.clone()
+            })
+            .clone();
+        drop(agents);
+        self.persist().await;
+        agent
     }
 
     pub async fn touch(&self, id: &str) {
@@ -62,13 +152,17 @@ impl AgentRegistry {
 
     /// Mute without revoking: the agent stays listed and keeps its token.
     pub async fn set_enabled(&self, id: &str, enabled: bool) -> bool {
-        match self.agents.write().await.get_mut(id) {
+        let found = match self.agents.write().await.get_mut(id) {
             Some(agent) => {
                 agent.enabled = enabled;
                 true
             }
             None => false,
+        };
+        if found {
+            self.persist().await;
         }
+        found
     }
 
     /// Replace the agent's app list wholesale. Replacing rather than merging is
@@ -76,6 +170,7 @@ impl AgentRegistry {
     /// must leave the bar, and a merge could never express that.
     pub async fn sync_apps(&self, id: &str, apps: Vec<AgentApp>) {
         self.apps.write().await.insert(id.to_string(), apps);
+        self.persist().await;
     }
 
     pub async fn apps(&self, id: &str) -> Vec<AgentApp> {
@@ -101,6 +196,8 @@ impl AgentRegistry {
             label: app_id.to_string(),
             health: AppHealth::Ok,
         });
+        drop(apps);
+        self.persist().await;
         true
     }
 
@@ -252,5 +349,89 @@ mod tests {
         let after = reg.get("a1").await.unwrap();
         assert!(after.last_seen >= created.last_seen);
         assert_eq!(after.connected_at, created.connected_at);
+    }
+
+    #[tokio::test]
+    async fn declared_apps_survive_a_restart() {
+        // The bar was empty after every restart until each agent happened to
+        // call in again, which reads as "nothing is connected".
+        let dir = tempfile::tempdir().unwrap();
+        {
+            let reg = AgentRegistry::load_or_create(dir.path());
+            reg.upsert("a1", "Grok Bot".into(), Some("1.0".into())).await;
+            reg.sync_apps("a1", vec![app("gmail", "Gmail"), app("linear", "Linear")]).await;
+        }
+
+        let reopened = AgentRegistry::load_or_create(dir.path());
+        let agents = reopened.list().await;
+        assert_eq!(agents.len(), 1);
+        assert_eq!(agents[0].name, "Grok Bot");
+
+        let apps = reopened.apps("a1").await;
+        assert_eq!(apps.len(), 2, "declared apps come back");
+        assert_eq!(apps[0].label, "Gmail");
+    }
+
+    #[tokio::test]
+    async fn restored_apps_report_unknown_health_until_the_agent_checks_in() {
+        // The last health we saw is not news. Showing it as live would be a
+        // claim Hive cannot make about an agent that has not spoken yet.
+        let dir = tempfile::tempdir().unwrap();
+        {
+            let reg = AgentRegistry::load_or_create(dir.path());
+            reg.sync_apps(
+                "a1",
+                vec![AgentApp {
+                    id: "gmail".into(),
+                    label: "Gmail".into(),
+                    health: AppHealth::Down,
+                }],
+            )
+            .await;
+        }
+
+        let reopened = AgentRegistry::load_or_create(dir.path());
+        assert_eq!(reopened.apps("a1").await[0].health, AppHealth::Unknown);
+
+        // And a fresh sync replaces it with what the agent actually reports.
+        reopened.sync_apps("a1", vec![app("gmail", "Gmail")]).await;
+        assert_eq!(reopened.apps("a1").await[0].health, AppHealth::Ok);
+    }
+
+    #[tokio::test]
+    async fn muting_an_agent_survives_a_restart() {
+        // Otherwise the mute quietly undoes itself and the agent starts posting
+        // again on its own.
+        let dir = tempfile::tempdir().unwrap();
+        {
+            let reg = AgentRegistry::load_or_create(dir.path());
+            reg.upsert("a1", "Grok".into(), None).await;
+            reg.set_enabled("a1", false).await;
+        }
+
+        let reopened = AgentRegistry::load_or_create(dir.path());
+        assert!(!reopened.get("a1").await.unwrap().enabled);
+    }
+
+    #[tokio::test]
+    async fn a_corrupt_file_starts_empty_rather_than_refusing_to_boot() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("agents.json"), "{not json").unwrap();
+        let reg = AgentRegistry::load_or_create(dir.path());
+        assert!(reg.list().await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn an_auto_added_app_is_persisted_too() {
+        // ensure_app is the safety net for an agent that posts without syncing;
+        // if it were not written, the app would vanish on the next restart and
+        // the post would again be unfilterable.
+        let dir = tempfile::tempdir().unwrap();
+        {
+            let reg = AgentRegistry::load_or_create(dir.path());
+            reg.ensure_app("a1", "made-up-thing").await;
+        }
+        let reopened = AgentRegistry::load_or_create(dir.path());
+        assert_eq!(reopened.apps("a1").await.len(), 1);
     }
 }

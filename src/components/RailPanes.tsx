@@ -8,25 +8,31 @@ import { ExpandedDashboard } from "./ExpandedDashboard";
 import { SessionDetail } from "./SessionDetail";
 import { Settings } from "./Settings";
 import { ConnectedAppsBar } from "./ConnectedAppsBar";
+import { useRailStore } from "../stores/railStore";
 
 type PaneId = "sessions" | "activity" | "tasks" | "agents" | "settings";
 
-/** Grouped the way the design has it: what Hive brings, then what the rail does. */
-const GROUPS: { group: string; items: { id: PaneId; label: string; icon: string }[] }[] = [
-  {
-    group: "Hive",
-    items: [{ id: "sessions", label: "Sessions", icon: "◫" }],
-  },
-  {
-    group: "Rail",
-    items: [
-      { id: "activity", label: "All activity", icon: "≡" },
-      { id: "tasks", label: "Tasks", icon: "✓" },
-      { id: "agents", label: "Agents", icon: "◇" },
-      { id: "settings", label: "Settings", icon: "⚙" },
-    ],
-  },
-];
+interface PaneGroup {
+  group: string;
+  items: { id: PaneId; label: string; icon: string }[];
+}
+
+/** What the rail does. Always present — the sidebar is the rail's own layout. */
+const RAIL_GROUP: PaneGroup = {
+  group: "Rail",
+  items: [
+    { id: "activity", label: "All activity", icon: "≡" },
+    { id: "tasks", label: "Tasks", icon: "✓" },
+    { id: "agents", label: "Agents", icon: "◇" },
+    { id: "settings", label: "Settings", icon: "⚙" },
+  ],
+};
+
+/** What Hive brings, once it has moved in. */
+const HIVE_GROUP: PaneGroup = {
+  group: "Hive",
+  items: [{ id: "sessions", label: "Sessions", icon: "◫" }],
+};
 
 /**
  * Hive's own pane, routed the way Hive routes it.
@@ -79,19 +85,24 @@ function HivePane() {
 }
 
 /**
- * Everything in one place, behind a sidebar.
+ * The rail's panes, behind a sidebar.
  *
- * Combined mode moves **Hive into the rail**, not the other way round: the rail
- * is the window that is always there, edge-docked and following the cursor, so
- * it is the one worth having everything in. Hive's window steps aside while
- * this is showing.
+ * One layout for both modes. Combined mode moves **Hive into the rail**, not the
+ * other way round — the rail is the window that is always there, edge-docked and
+ * following the cursor, so it is the one worth having everything in — and all
+ * that adds here is the Hive group. Hive's own window steps aside while it is on.
  *
  * These are the same components both windows already use — nothing is
  * reimplemented — and it never creates a window, because
  * `WebviewWindowBuilder::build()` deadlocks once the event loop is running.
  */
-export function CombinedPanes() {
-  const [pane, setPane] = useState<PaneId>("sessions");
+export function RailPanes() {
+  const combined = useRailStore((s) => s.combined);
+  // Hive's group is the only difference between the two modes. The sidebar
+  // itself is the rail's layout either way — it was a row of tabs first, and a
+  // sidebar reads better at every width the rail is ever given.
+  const groups = combined ? [HIVE_GROUP, RAIL_GROUP] : [RAIL_GROUP];
+  const [pane, setPane] = useState<PaneId>(combined ? "sessions" : "activity");
   // The connector strip sits above every pane here rather than inside the feed,
   // so the connected apps stay in view whichever pane is showing. Picking one
   // still filters the feed, so the selection has to live above both.
@@ -122,6 +133,10 @@ export function CombinedPanes() {
     tasks: overdueTasks > 0,
   };
 
+  // Detaching removes the Sessions pane; leaving it selected would show a blank
+  // content area with no sidebar row to explain it.
+  const active: PaneId = !combined && pane === "sessions" ? "activity" : pane;
+
   const selectApp = (appId: string | null) => {
     setSelectedApp(appId);
     // Filtering by an app is a request to see that app's activity, which is not
@@ -135,7 +150,7 @@ export function CombinedPanes() {
         className="shrink-0 flex flex-col gap-0.5 p-2 overflow-y-auto"
         style={{ width: 150, borderRight: "1px solid var(--hub-hair)" }}
       >
-        {GROUPS.map(({ group, items }) => (
+        {groups.map(({ group, items }) => (
           <div key={group} className="flex flex-col gap-0.5">
             <span
               className="text-[9.5px] font-semibold uppercase tracking-wide px-2 pt-1.5 pb-0.5"
@@ -145,14 +160,14 @@ export function CombinedPanes() {
             </span>
             {items.map((item) => {
               const count = counts[item.id] ?? 0;
-              const active = pane === item.id;
+              const isActive = active === item.id;
               const isHot = hot[item.id] === true && count > 0;
               return (
                 <button
                   key={item.id}
                   type="button"
                   data-testid="sidebar-item"
-                  aria-pressed={active}
+                  aria-pressed={isActive}
                   onClick={() => setPane(item.id)}
                   className="flex items-center gap-2 w-full text-left px-2 py-[5px]"
                   style={{
@@ -160,9 +175,9 @@ export function CombinedPanes() {
                     borderRadius: 7,
                     cursor: "pointer",
                     fontSize: 12.5,
-                    fontWeight: active ? 600 : 500,
-                    background: active ? "var(--hub-surface)" : "transparent",
-                    color: active ? "var(--hub-text)" : "var(--hub-text-muted)",
+                    fontWeight: isActive ? 600 : 500,
+                    background: isActive ? "var(--hub-surface)" : "transparent",
+                    color: isActive ? "var(--hub-text)" : "var(--hub-text-muted)",
                   }}
                 >
                   <span
@@ -172,7 +187,7 @@ export function CombinedPanes() {
                       textAlign: "center",
                       // The active pane's mark takes the accent, which is what
                       // carries the selection in the design.
-                      color: active ? "var(--hub-accent)" : "var(--hub-text-dim)",
+                      color: isActive ? "var(--hub-accent)" : "var(--hub-text-dim)",
                     }}
                   >
                     {item.icon}
@@ -209,13 +224,13 @@ export function CombinedPanes() {
       <div className="flex-1 min-w-0 flex flex-col">
         <ConnectedAppsBar selected={selectedApp} onSelect={selectApp} />
 
-        {pane === "sessions" && <HivePane />}
-        {pane === "activity" && (
+        {active === "sessions" && <HivePane />}
+        {active === "activity" && (
           <RailPanel embedded selectedApp={selectedApp} onSelectApp={setSelectedApp} />
         )}
-        {pane === "tasks" && <TasksPane />}
-        {pane === "agents" && <AgentsPane />}
-        {pane === "settings" && <RailSettingsPane />}
+        {active === "tasks" && <TasksPane />}
+        {active === "agents" && <AgentsPane />}
+        {active === "settings" && <RailSettingsPane />}
       </div>
     </div>
   );

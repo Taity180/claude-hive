@@ -15,7 +15,7 @@ vi.mock("../agentApi", () => ({
   setAgentEnabled: vi.fn().mockResolvedValue(true),
 }));
 
-import { CombinedPanes } from "./CombinedPanes";
+import { RailPanes } from "./RailPanes";
 import { useHubStore } from "../stores/hubStore";
 import { useRailStore } from "../stores/railStore";
 
@@ -35,7 +35,7 @@ const openTask = {
   updatedAt: "",
 };
 
-describe("CombinedPanes", () => {
+describe("RailPanes", () => {
   beforeEach(() => {
     invoke.mockClear().mockResolvedValue(undefined);
     localStorage.clear();
@@ -52,19 +52,29 @@ describe("CombinedPanes", () => {
     });
   });
 
-  it("groups the sidebar into what Hive brings and what the rail does", () => {
-    render(<CombinedPanes />);
+  it("shows only the rail's own panes until Hive moves in", () => {
+    render(<RailPanes />);
+    expect(screen.getByText("Rail")).toBeInTheDocument();
+    expect(screen.queryByText("Hive")).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Sessions/ })).toBeNull();
+  });
+
+  it("adds Hive's group when combined", () => {
+    useRailStore.getState().setCombined(true);
+    render(<RailPanes />);
     expect(screen.getByText("Hive")).toBeInTheDocument();
     expect(screen.getByText("Rail")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Sessions/ })).toBeInTheDocument();
   });
 
   it("keeps the connector strip above every pane, not just the feed", async () => {
+    useRailStore.getState().setCombined(true);
     useHubStore.setState({
       agentApps: [
         { agentId: "a1", agentName: "Grok Bot", id: "gmail", label: "Gmail", health: "ok" },
       ] as never,
     });
-    render(<CombinedPanes />);
+    render(<RailPanes />);
     // Sessions is the pane on open, and the strip has to be there too.
     expect(screen.getByTitle(/Gmail/)).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: /^Tasks/ }));
@@ -72,42 +82,44 @@ describe("CombinedPanes", () => {
   });
 
   it("shows a sidebar entry per pane", () => {
-    render(<CombinedPanes />);
+    useRailStore.getState().setCombined(true);
+    render(<RailPanes />);
     for (const label of ["Sessions", "All activity", "Tasks", "Agents", "Settings"]) {
       expect(screen.getByRole("button", { name: new RegExp(`^${label}`) })).toBeInTheDocument();
     }
   });
 
   it("switches pane", async () => {
-    render(<CombinedPanes />);
+    render(<RailPanes />);
     await userEvent.click(screen.getByRole("button", { name: /^Tasks/ }));
     expect(screen.getByTestId("task-add-input")).toBeInTheDocument();
   });
 
   it("counts open tasks in the sidebar", () => {
     useHubStore.setState({ tasks: [openTask] });
-    render(<CombinedPanes />);
+    render(<RailPanes />);
     expect(screen.getByTestId("sidebar-count-tasks")).toHaveTextContent("1");
   });
 
   it("shows no count when there is nothing outstanding", () => {
-    render(<CombinedPanes />);
+    render(<RailPanes />);
     expect(screen.queryByTestId("sidebar-count-tasks")).toBeNull();
   });
 
   it("counts sessions needing attention", () => {
+    useRailStore.getState().setCombined(true);
     useHubStore.setState({
       sessions: [
         { sessionHandle: 1, status: "waiting_for_input" },
         { sessionHandle: 2, status: "idle" },
       ] as never,
     });
-    render(<CombinedPanes />);
+    render(<RailPanes />);
     expect(screen.getByTestId("sidebar-count-sessions")).toHaveTextContent("1");
   });
 
   it("marks the active pane", () => {
-    render(<CombinedPanes />);
+    render(<RailPanes />);
     const pressed = screen
       .getAllByTestId("sidebar-item")
       .filter((b) => b.getAttribute("aria-pressed") === "true");
@@ -115,10 +127,11 @@ describe("CombinedPanes", () => {
   });
 
   it("follows Hive's own navigation instead of leaving a dead click", async () => {
+    useRailStore.getState().setCombined(true);
     // The dashboard's rows set viewState; if the pane only ever rendered the
     // dashboard, clicking a session would change state and show nothing.
     useHubStore.setState({ viewState: "settings" });
-    render(<CombinedPanes />);
+    render(<RailPanes />);
     expect(screen.getByTestId("hive-pane-back")).toBeInTheDocument();
 
     await userEvent.click(screen.getByTestId("hive-pane-back"));

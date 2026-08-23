@@ -69,6 +69,15 @@ Three surfaces, two windows, one backend process.
 
 - A `Rail` button in Hive's title bar opens the Rail window.
 - Each window is hideable independently; the tray menu governs both.
+- **The Rail opens into a sidebar**, not a row of tabs: Rail (All activity / Tasks / Agents / Settings),
+  plus a Hive group (Sessions) once combined mode is on. One layout for both modes — the sidebar reads
+  better at every width the rail is given, and the tab strip could not have carried a fifth pane. The plain
+  rail's default width grew from 372px to 520px to make room for it.
+- **Declared apps and agents persist** (`agents.json`), like tasks. A session is alive or it is not, but an
+  agent's declared apps are a standing fact, and losing them on restart left the connector bar empty until
+  every agent happened to call in — which reads as "nothing is connected" rather than "nobody has checked in
+  yet". Restored apps report `unknown` health until their agent speaks: the last health seen is not news.
+  `enabled` persists for the same reason — a mute that undoes itself on restart is not a mute.
 - **Combined mode** is a setting that brings **Hive into the Rail** behind a sidebar
   (Sessions / Activity / Tasks / Agents / Settings). Hive's own window hides itself while it is on, and
   `Detach Hive` in the sidebar reverses it (`show_main_window`). Same pane components either way.

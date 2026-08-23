@@ -45,7 +45,7 @@ impl AppState {
             questions: QuestionStore::new(),
             usage: UsageScanner::new(),
             plan_usage: PlanUsageClient::new(),
-            agents: AgentRegistry::new(),
+            agents: AgentRegistry::load_or_create(dir),
             agent_feed: AgentFeed::new(),
             tasks: TaskStore::load_or_create(dir),
             agent_tokens: Arc::new(RwLock::new(tokens)),

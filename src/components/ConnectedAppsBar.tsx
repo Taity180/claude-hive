@@ -13,6 +13,16 @@ const healthColor: Record<AppHealth, string> = {
   ok: "#22c55e",
   degraded: "#eab308",
   down: "#ef4444",
+  // Declared last run, nothing heard yet this one. Hollow rather than a colour:
+  // any colour here would be a claim about an app nobody has reported on.
+  unknown: "transparent",
+};
+
+const healthLabel: Record<AppHealth, string> = {
+  ok: "connected",
+  degraded: "degraded",
+  down: "down",
+  unknown: "not checked in yet",
 };
 
 interface ConnectedAppsBarProps {
@@ -59,8 +69,8 @@ export function ConnectedAppsBar({ selected, onSelect }: ConnectedAppsBarProps) 
             data-selected={isSelected ? "true" : undefined}
             data-health={app.health}
             data-muted={isMuted ? "true" : undefined}
-            title={`${app.label} — via ${app.agentName}${
-              isMuted ? " (muted)" : ""
+            title={`${app.label} — via ${app.agentName}, ${healthLabel[app.health]}${
+              isMuted ? ", muted" : ""
             }. Right-click to ${isMuted ? "unmute" : "mute"}.`}
             aria-pressed={isSelected}
             // Clicking the selected app clears the filter, so the bar is both
@@ -139,6 +149,8 @@ export function ConnectedAppsBar({ selected, onSelect }: ConnectedAppsBarProps) 
                   height: 7,
                   borderRadius: 999,
                   background: healthColor[app.health],
+                  border:
+                    app.health === "unknown" ? "1.5px solid #6b7280" : undefined,
                   boxShadow: "0 0 0 1.5px var(--hub-bg-solid)",
                 }}
               />

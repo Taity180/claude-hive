@@ -26,6 +26,12 @@ pub enum AppHealth {
     Ok,
     Degraded,
     Down,
+    /// Restored from disk, with nothing heard from the agent yet this run.
+    ///
+    /// Declared apps survive a restart so the bar is not empty until every
+    /// agent next calls in — but the last health we saw is not news, and
+    /// showing it as live would be a claim Hive cannot make.
+    Unknown,
 }
 
 /// One connected app (Gmail, Linear, …) as declared by an agent.
@@ -90,6 +96,11 @@ mod tests {
         assert!(json.get("agentId").is_some(), "expected camelCase agentId");
         assert!(json.get("appId").is_some(), "expected camelCase appId");
         assert!(json.get("agent_id").is_none(), "must not emit snake_case");
+    }
+
+    #[test]
+    fn unknown_health_serialises_for_the_frontend() {
+        assert_eq!(serde_json::to_string(&AppHealth::Unknown).unwrap(), "\"unknown\"");
     }
 
     #[test]

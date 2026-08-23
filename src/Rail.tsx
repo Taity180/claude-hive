@@ -5,12 +5,8 @@ import { useTheme } from "./hooks/useTheme";
 import { useWebSocket } from "./hooks/useWebSocket";
 import { isHorizontalAnchor, nubSize, useRailStore } from "./stores/railStore";
 import { RailNub } from "./components/RailNub";
-import { RailPanel } from "./components/RailPanel";
-import { AgentsPane } from "./components/AgentsPane";
-import { TasksPane } from "./components/TasksPane";
 import { RailChrome } from "./components/RailChrome";
-import { RailSettingsPane } from "./components/RailSettingsPane";
-import { CombinedPanes } from "./components/CombinedPanes";
+import { RailPanes } from "./components/RailPanes";
 import { DetachHiveButton } from "./components/DetachHiveButton";
 import { PlanUsageChip } from "./components/PlanUsage";
 import { GlobalUsage } from "./components/UsageMeter";
@@ -51,7 +47,6 @@ export function Rail() {
   // The rail window is created hidden at startup, so this component mounts long
   // before it is on screen. Rust tells us when that changes; without it the
   // cursor-follow poll below would run all day against a hidden window.
-  const [pane, setPane] = useState<"feed" | "tasks" | "agents" | "settings">("feed");
   // Which edge the panel grows from, so the slide-in runs the right way.
   const anchorSide = isHorizontalAnchor(anchor)
     ? anchor === "top"
@@ -207,65 +202,24 @@ export function Rail() {
         cancelClose();
       }}
     >
-      {open && combined ? (
-        // Hive lives here now, so the sidebar layout replaces the tab strip —
-        // five panes is more than a row of tabs can carry.
+      {open ? (
         <div className="flex flex-col h-full rail-slide-in" data-anchor-side={anchorSide}>
           <div
             data-tauri-drag-region
             onMouseDown={startDrag}
-            className="flex items-center gap-2 px-2.5 py-1.5 shrink-0 select-none cursor-grab active:cursor-grabbing"
+            className="flex items-center gap-2 px-2.5 py-1.5 shrink-0 select-none"
             style={{ borderBottom: "1px solid var(--hub-hair)" }}
           >
             <span className="text-[12px] font-semibold" style={{ color: "var(--hub-text)" }}>
-              Hive
+              {combined ? "Hive" : "Rail"}
             </span>
             <span className="flex-1" />
             <PlanUsageChip />
             <GlobalUsage />
-            <DetachHiveButton />
+            {combined && <DetachHiveButton />}
             <RailChrome onCollapse={() => setOpen(false)} />
           </div>
-          <CombinedPanes />
-        </div>
-      ) : open ? (
-        <div className="flex flex-col h-full rail-slide-in" data-anchor-side={anchorSide}>
-          <div
-            className="flex items-center gap-1 px-2 pt-2 shrink-0"
-            role="group"
-            aria-label="Rail pane"
-          >
-            {(["feed", "tasks", "agents", "settings"] as const).map((id) => (
-              <button
-                key={id}
-                type="button"
-                data-testid={`pane-${id}`}
-                aria-pressed={pane === id}
-                onClick={() => setPane(id)}
-                className="text-[11px] rounded-md px-2 py-0.5"
-                style={{
-                  border: 0,
-                  cursor: "pointer",
-                  fontWeight: pane === id ? 600 : 500,
-                  background: pane === id ? "var(--hub-surface)" : "transparent",
-                  color: pane === id ? "var(--hub-text)" : "var(--hub-text-muted)",
-                }}
-              >
-                {id === "feed" ? "Activity" : id === "tasks" ? "Tasks" : id === "agents" ? "Agents" : "Settings"}
-              </button>
-            ))}
-            <span className="flex-1" />
-            <RailChrome onCollapse={() => setOpen(false)} />
-          </div>
-          {pane === "feed" ? (
-            <RailPanel />
-          ) : pane === "tasks" ? (
-            <TasksPane />
-          ) : pane === "agents" ? (
-            <AgentsPane />
-          ) : (
-            <RailSettingsPane />
-          )}
+          <RailPanes />
         </div>
       ) : (
         <RailNub onOpen={() => setOpen(true)} />

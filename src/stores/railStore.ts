@@ -38,10 +38,12 @@ export function isHorizontalAnchor(anchor: AnchorId): boolean {
 
 /** A rail on a horizontal edge is wide; on a vertical edge it is tall. */
 function defaultSize(anchor: AnchorId, combined: boolean): [number, number] {
-  // Combined mode holds the whole of Hive behind a 132px sidebar, so the plain
-  // rail's 372px would open it as a sliver with the session list cut off.
+  // Combined mode holds the whole of Hive behind the sidebar, so the plain
+  // rail's width would open it as a sliver with the session list cut off.
   if (combined) return isHorizontalAnchor(anchor) ? [1180, 560] : [760, 780];
-  return isHorizontalAnchor(anchor) ? [820, 280] : [372, 620];
+  // Wider than the 372px this was when the panes sat behind a row of tabs: the
+  // sidebar takes 150 of it, and 222px of feed is not a feed.
+  return isHorizontalAnchor(anchor) ? [900, 340] : [520, 660];
 }
 
 /**
