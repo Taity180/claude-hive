@@ -111,6 +111,48 @@ fn handle_tools_list(id: Option<Value>) -> JsonRpcResponse {
     JsonRpcResponse::success(id, json!({ "tools": tools }))
 }
 
+/// snake_case a single key, so `appId` also finds `app_id`.
+fn to_snake_case(key: &str) -> String {
+    let mut out = String::with_capacity(key.len() + 2);
+    for ch in key.chars() {
+        if ch.is_ascii_uppercase() {
+            out.push('_');
+            out.push(ch.to_ascii_lowercase());
+        } else {
+            out.push(ch);
+        }
+    }
+    out
+}
+
+/// Accept camelCase argument names alongside the snake_case the schemas declare.
+///
+/// Every one of these arguments has a camelCase twin in Hive's own HTTP API, so
+/// sending `appId` for `app_id` is an easy mistake — and it used to be a silent
+/// one: the call succeeded, the post arrived with no provenance, and the task
+/// arrived with no external id, so the next run duplicated the whole list
+/// instead of updating it. Accepting both costs nothing.
+///
+/// Top level only. That is where every argument the tools read lives; the one
+/// nested shape (`apps`) is already all-lowercase keys.
+fn normalise_arg_keys(args: Value) -> Value {
+    let Value::Object(map) = args else {
+        return args;
+    };
+
+    let mut out = serde_json::Map::new();
+    // Declared spellings first, so an agent sending both keeps the real one.
+    for (key, value) in &map {
+        if to_snake_case(key) == *key {
+            out.insert(key.clone(), value.clone());
+        }
+    }
+    for (key, value) in map {
+        out.entry(to_snake_case(&key)).or_insert(value);
+    }
+    Value::Object(out)
+}
+
 async fn handle_tools_call(
     state: &AppState,
     agent_id: &str,
@@ -119,7 +161,7 @@ async fn handle_tools_call(
 ) -> JsonRpcResponse {
     let params = params.unwrap_or_else(|| json!({}));
     let tool = params.get("name").and_then(|n| n.as_str()).unwrap_or("");
-    let args = params.get("arguments").cloned().unwrap_or_else(|| json!({}));
+    let args = normalise_arg_keys(params.get("arguments").cloned().unwrap_or_else(|| json!({})));
 
     let Some(agent) = state.agents.get(agent_id).await else {
         return tool_error(
@@ -762,5 +804,55 @@ mod tests {
             crate::models::WsEvent::AgentPosted { post } => assert_eq!(post.content, "hello"),
             other => panic!("expected AgentPosted, got {other:?}"),
         }
+    }
+
+    #[tokio::test]
+    async fn camel_case_argument_names_are_accepted() {
+        // Hive's HTTP API is camelCase and the tool schemas are snake_case, so
+        // an agent sending `appId` is an easy mistake. It used to succeed and
+        // quietly drop the provenance and the dedupe key.
+        let (state, _dir) = test_state();
+        state.agents.upsert("a1", "Grok".into(), None).await;
+        let value = call(
+            &state,
+            "tasks_upsert",
+            json!({
+                "title": "Reply to Q3 invoicing",
+                "externalId": "gmail:thread-1",
+                "appId": "gmail",
+                "sourceLabel": "Re: Q3 invoicing"
+            }),
+        )
+        .await;
+        assert!(value["result"]["isError"].is_null(), "{value}");
+
+        let tasks = state.tasks.list().await;
+        assert_eq!(tasks.len(), 1);
+        assert_eq!(tasks[0].external_id.as_deref(), Some("gmail:thread-1"));
+        assert_eq!(tasks[0].app_id.as_deref(), Some("gmail"));
+        assert_eq!(tasks[0].source_label.as_deref(), Some("Re: Q3 invoicing"));
+    }
+
+    #[tokio::test]
+    async fn a_declared_spelling_wins_over_its_camel_case_twin() {
+        let (state, _dir) = test_state();
+        state.agents.upsert("a1", "Grok".into(), None).await;
+        call(
+            &state,
+            "agent_post",
+            json!({ "content": "both spellings", "app_id": "gmail", "appId": "slack" }),
+        )
+        .await;
+
+        let posts = state.agent_feed.recent(10).await;
+        assert_eq!(posts[0].app_id.as_deref(), Some("gmail"));
+    }
+
+    #[test]
+    fn snake_casing_leaves_declared_names_alone() {
+        assert_eq!(to_snake_case("app_id"), "app_id");
+        assert_eq!(to_snake_case("appId"), "app_id");
+        assert_eq!(to_snake_case("sourceLabel"), "source_label");
+        assert_eq!(to_snake_case("content"), "content");
     }
 }

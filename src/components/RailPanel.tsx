@@ -51,7 +51,10 @@ function SessionRow({ session }: { session: Session }) {
           <button
             type="button"
             onClick={() => setActiveSession(session.id)}
-            className="text-[12px] font-semibold truncate text-left"
+            // A flex line, not a block: the rename pencil is an inline SVG and
+            // `truncate` on a block button dropped it onto a line of its own
+            // under the name.
+            className="flex items-center gap-1 min-w-0 text-left"
             style={{
               background: "none",
               border: 0,
@@ -60,7 +63,11 @@ function SessionRow({ session }: { session: Session }) {
               cursor: "pointer",
             }}
           >
-            <InlineRename session={session} revealOnHover={false} />
+            <InlineRename
+              session={session}
+              className="text-[12px] font-semibold truncate"
+              revealOnHover={false}
+            />
           </button>
           {session.windowHandle && (
             <button

@@ -110,6 +110,18 @@ export function CombinedPanes() {
     agents: agents.length,
   };
 
+  // Red is for "you need to act", the way the design uses it. Sessions counts
+  // only those already waiting or errored, so any is red; tasks turn red on
+  // something overdue rather than on merely existing — a badge that is always
+  // red stops being read.
+  const overdueTasks = tasks.filter(
+    (t) => !t.done && t.due !== null && new Date(t.due).getTime() < Date.now()
+  ).length;
+  const hot: Partial<Record<PaneId, boolean>> = {
+    sessions: (counts.sessions ?? 0) > 0,
+    tasks: overdueTasks > 0,
+  };
+
   const selectApp = (appId: string | null) => {
     setSelectedApp(appId);
     // Filtering by an app is a request to see that app's activity, which is not
@@ -121,7 +133,7 @@ export function CombinedPanes() {
     <div className="flex h-full min-h-0">
       <div
         className="shrink-0 flex flex-col gap-0.5 p-2 overflow-y-auto"
-        style={{ width: 138, borderRight: "1px solid var(--hub-hair)" }}
+        style={{ width: 150, borderRight: "1px solid var(--hub-hair)" }}
       >
         {GROUPS.map(({ group, items }) => (
           <div key={group} className="flex flex-col gap-0.5">
@@ -134,6 +146,7 @@ export function CombinedPanes() {
             {items.map((item) => {
               const count = counts[item.id] ?? 0;
               const active = pane === item.id;
+              const isHot = hot[item.id] === true && count > 0;
               return (
                 <button
                   key={item.id}
@@ -141,9 +154,10 @@ export function CombinedPanes() {
                   data-testid="sidebar-item"
                   aria-pressed={active}
                   onClick={() => setPane(item.id)}
-                  className="flex items-center gap-2 w-full text-left rounded-md px-2 py-1"
+                  className="flex items-center gap-2 w-full text-left px-2 py-[5px]"
                   style={{
                     border: 0,
+                    borderRadius: 7,
                     cursor: "pointer",
                     fontSize: 12.5,
                     fontWeight: active ? 600 : 500,
@@ -151,15 +165,36 @@ export function CombinedPanes() {
                     color: active ? "var(--hub-text)" : "var(--hub-text-muted)",
                   }}
                 >
-                  <span aria-hidden="true" style={{ width: 14, textAlign: "center" }}>
+                  <span
+                    aria-hidden="true"
+                    style={{
+                      width: 14,
+                      textAlign: "center",
+                      // The active pane's mark takes the accent, which is what
+                      // carries the selection in the design.
+                      color: active ? "var(--hub-accent)" : "var(--hub-text-dim)",
+                    }}
+                  >
                     {item.icon}
                   </span>
                   {item.label}
                   {count > 0 && (
                     <span
                       data-testid={`sidebar-count-${item.id}`}
+                      data-hot={isHot ? "true" : undefined}
                       className="ml-auto tabular-nums"
-                      style={{ fontSize: 10, color: "var(--hub-text-dim)" }}
+                      style={
+                        isHot
+                          ? {
+                              fontSize: 10,
+                              fontWeight: 700,
+                              color: "#fff",
+                              background: "#ff453a",
+                              borderRadius: 999,
+                              padding: "0.5px 5px",
+                            }
+                          : { fontSize: 10, color: "var(--hub-text-dim)" }
+                      }
                     >
                       {count}
                     </span>

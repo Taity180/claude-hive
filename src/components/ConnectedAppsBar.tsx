@@ -78,12 +78,16 @@ export function ConnectedAppsBar({ selected, onSelect }: ConnectedAppsBarProps) 
               height: 25,
               border: 0,
               cursor: "pointer",
+              // Selected reads as a tinted tile rather than a solid block: a
+              // brand mark on a saturated accent loses its own colour.
               background: isSelected
-                ? "var(--hub-accent)"
+                ? "color-mix(in srgb, var(--hub-accent) 22%, transparent)"
                 : icon.kind === "monogram"
                   ? `hsl(${icon.hue} 45% 22%)`
                   : "var(--hub-surface)",
-              boxShadow: isSelected ? "none" : "inset 0 0 0 1px var(--hub-hair)",
+              boxShadow: isSelected
+                ? "inset 0 0 0 1px color-mix(in srgb, var(--hub-accent) 50%, transparent)"
+                : "inset 0 0 0 1px var(--hub-hair)",
               // Dimmed rather than removed: a muted app is still connected, and
               // hiding it would leave no way to unmute from here.
               opacity: isMuted ? 0.45 : 1,
