@@ -508,28 +508,32 @@ order hides that frame depends on the direction — opening out from the nub, mo
 first and the frame is inside the final rect; collapsing back, resize first. The
 wrong order leaves the window briefly hanging off the screen edge.
 
-### Opening is the window growing
+### Opening, and the three things that flashed
 
-The last of the flash was the frosted backdrop. Acrylic is painted by the
-compositor the moment the window has size, so a window that arrives at full size
-shows a blank frosted rectangle for a frame however fast the content follows.
-CSS cannot help: by then the window already exists.
+The frosted backdrop exists the moment the window has size — acrylic is painted
+by the compositor, not by the page — so anything not ready at that instant shows
+as a blank frosted slab. That is the flash, and it took three goes to remove.
 
-So the window itself grows. `animate_rail` interpolates from wherever the rail is
-to the target rect over 140ms, ease-out, ~16ms a frame, and there is nothing left
-to flash because the rect is never bigger than what has been drawn. An atomic
-counter means a newer animation supersedes a running one, and any un-animated
-placement takes ownership — a cursor-follow tick mid-animation stops it rather
-than fighting frame by frame.
+1. **Placed after showing.** `open_rail` showed the window and left the frontend
+   to position it, so it appeared at whatever rect it last had and then jumped.
+   Fixed by passing the geometry to `open_rail` and placing while hidden.
+2. **Grown over a few frames.** Animating the window from nub to panel hid the
+   slab, but a 32px nub becoming a 520px panel is half a screen of travel — and
+   hovering in and out left animations starting from each other's half-finished
+   rects, so the window was permanently mid-sweep. Removed, along with the
+   easing and interpolation helpers it needed: dead code, not kept "in case".
+3. **Painted into a 32px window.** Rendering the panel and resizing two frames
+   later left those frames showing a slice of the panel clipped into the nub's
+   window.
 
-Two things follow from the window being the motion:
+What works: the panel renders **invisible behind the nub**, so nothing on screen
+changes while the webview rasterises it; two frames later the window resizes and
+the panel is revealed in the same tick. `opacity: 0` rather than
+`visibility: hidden`, which skips painting and would leave nothing rasterised.
+Showing it is then a compositor change, not a repaint, so there is nothing for
+the frosted slab to be waiting on.
 
-- The panel is laid out at its **final** size while the window is still growing,
-  so it is revealed rather than reflowed eight times on the way.
-- The content only fades in. The old per-edge slide translated it as well, which
-  on top of a growing window read as two separate things moving; those four
-  keyframe blocks are gone.
-
-`animate_rail` is a separate command rather than a flag on `place_rail`, because
-the cursor-follow poll must never animate: four animations a second would be a
-permanent slow drift instead of a move.
+The only motion left is a **content-level drawer reveal** — 180ms, opacity 0→1,
+20px translate out of the anchored edge, `cubic-bezier(0.16, 1, 0.3, 1)`. In CSS
+rather than Framer Motion: identical output, and the dependency would be ~40KB
+for one transition.

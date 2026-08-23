@@ -370,7 +370,7 @@ describe("Rail", () => {
     const root = screen.getByTestId("rail-root");
     expect(root.style.background).toBe("transparent");
 
-    const panel = root.firstElementChild as HTMLElement;
+    const panel = screen.getByTestId("rail-panel");
     expect(panel.style.background).toContain("50%");
 
     const sidebar = screen.getByRole("button", { name: /^All activity/ })
@@ -378,46 +378,111 @@ describe("Rail", () => {
     expect(sidebar.style.background).toContain("90%");
   });
 
-  it("animates opening and collapsing, but places everything else at once", async () => {
-    // The follow poll must never animate: four animations a second would be a
-    // permanent slow drift rather than a move.
-    invokeMock.mockImplementation((cmd: string) =>
-      cmd === "cursor_over_rail" ? Promise.resolve(false) : Promise.resolve(null)
-    );
-    useRailStore.setState({ open: false, openOn: "click", followCursor: false });
-    render(<Rail />);
-    await act(async () => {
-      await Promise.resolve();
-      await Promise.resolve();
-    });
+  it("waits for the panel to be painted before resizing the window", async () => {
+    // The flash was the frosted backdrop arriving before the content. Painting
+    // first and then resizing once leaves nothing to flash — and nothing to
+    // travel, which is what animating the window itself caused.
+    const frames: FrameRequestCallback[] = [];
+    const raf = vi
+      .spyOn(window, "requestAnimationFrame")
+      .mockImplementation((cb: FrameRequestCallback) => {
+        frames.push(cb);
+        return frames.length;
+      });
 
-    invokeMock.mockClear();
-    await act(async () => {
-      useRailStore.getState().setOpen(true);
-      await Promise.resolve();
-    });
-    expect(invokeMock.mock.calls.map((c) => c[0])).toContain("animate_rail");
+    try {
+      invokeMock.mockImplementation((cmd: string) =>
+        cmd === "cursor_over_rail" ? Promise.resolve(false) : Promise.resolve(null)
+      );
+      useRailStore.setState({ open: false, openOn: "click", followCursor: false });
+      render(<Rail />);
+      await act(async () => {
+        await Promise.resolve();
+        await Promise.resolve();
+      });
 
-    // An anchor change is the user asking for a different edge; sliding across
-    // the desktop to get there would read as the window escaping.
-    invokeMock.mockClear();
-    await act(async () => {
-      useRailStore.getState().setAnchor("left");
-      await Promise.resolve();
-    });
-    const commands = invokeMock.mock.calls.map((c) => c[0]);
-    expect(commands).toContain("place_rail");
-    expect(commands).not.toContain("animate_rail");
+      invokeMock.mockClear();
+      await act(async () => {
+        useRailStore.getState().setOpen(true);
+        await Promise.resolve();
+      });
+
+      // Nothing placed yet: the panel has been rendered, not yet painted.
+      expect(invokeMock.mock.calls.filter((c) => c[0] === "place_rail")).toHaveLength(0);
+
+      // Two frames later it places, once, with no interpolation.
+      await act(async () => {
+        frames.forEach((frame) => frame(0));
+        await Promise.resolve();
+      });
+      await act(async () => {
+        frames.forEach((frame) => frame(0));
+        await Promise.resolve();
+      });
+
+      const placed = invokeMock.mock.calls.filter((c) => c[0] === "place_rail");
+      expect(placed.length).toBeGreaterThan(0);
+      expect(invokeMock.mock.calls.map((c) => c[0])).not.toContain("animate_rail");
+    } finally {
+      raf.mockRestore();
+    }
   });
 
-  it("lays the panel out at its final size while the window is still growing", async () => {
+  it("lays the panel out at its final size, so the resize reveals it", async () => {
     // Otherwise the content reflows on every frame of the animation.
     useRailStore.setState({ open: true, anchor: "right" });
     useRailStore.getState().setSizeForAnchor("right", [480, 700]);
     render(<Rail />);
 
-    const panel = screen.getByTestId("rail-root").firstElementChild as HTMLElement;
+    const panel = screen.getByTestId("rail-panel");
     expect(panel.style.width).toBe("480px");
     expect(panel.style.height).toBe("700px");
+  });
+
+  it("keeps the nub on screen while the panel rasterises behind it", async () => {
+    // The two frames before the resize used to show a slice of the panel
+    // clipped into the nub's 32px window, which is what still read as a flash.
+    const frames: FrameRequestCallback[] = [];
+    const raf = vi
+      .spyOn(window, "requestAnimationFrame")
+      .mockImplementation((cb: FrameRequestCallback) => {
+        frames.push(cb);
+        return frames.length;
+      });
+
+    try {
+      invokeMock.mockImplementation((cmd: string) =>
+        cmd === "cursor_over_rail" ? Promise.resolve(false) : Promise.resolve(null)
+      );
+      useRailStore.setState({ open: false, openOn: "click", followCursor: false });
+      render(<Rail />);
+      await act(async () => {
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      await act(async () => {
+        useRailStore.getState().setOpen(true);
+        await Promise.resolve();
+      });
+
+      // Painted but not shown, with the nub still covering it.
+      expect(screen.getByTestId("rail-panel").style.opacity).toBe("0");
+      expect(screen.getByTestId("rail-nub")).toBeInTheDocument();
+
+      await act(async () => {
+        frames.forEach((frame) => frame(0));
+        await Promise.resolve();
+      });
+      await act(async () => {
+        frames.forEach((frame) => frame(0));
+        await Promise.resolve();
+      });
+
+      expect(screen.getByTestId("rail-panel").style.opacity).toBe("1");
+      expect(screen.queryByTestId("rail-nub")).toBeNull();
+    } finally {
+      raf.mockRestore();
+    }
   });
 });

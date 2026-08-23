@@ -93,34 +93,6 @@ pub struct Rect {
     pub height: u32,
 }
 
-/// Ease-out cubic: fast at first, settling at the end.
-///
-/// A linear open reads as mechanical; the same duration eased reads as quick.
-pub fn ease_out(t: f64) -> f64 {
-    let t = t.clamp(0.0, 1.0);
-    1.0 - (1.0 - t).powi(3)
-}
-
-/// The rectangle `fraction` of the way from `from` to `to`, eased.
-///
-/// Rounded rather than truncated, so the final frame lands exactly on the target
-/// instead of a pixel short of it.
-pub fn interpolate(from: Rect, to: Rect, fraction: f64) -> Rect {
-    let t = ease_out(fraction);
-    let lerp = |a: i32, b: i32| (a as f64 + (b as f64 - a as f64) * t).round() as i32;
-    let lerp_u = |a: u32, b: u32| {
-        let value = a as f64 + (b as f64 - a as f64) * t;
-        value.round().max(1.0) as u32
-    };
-
-    Rect {
-        x: lerp(from.x, to.x),
-        y: lerp(from.y, to.y),
-        width: lerp_u(from.width, to.width),
-        height: lerp_u(from.height, to.height),
-    }
-}
-
 /// Is `point` inside the rect at `origin` of `size`?
 ///
 /// Half-open on the far edges, like `monitor_containing`: a cursor exactly on
@@ -369,54 +341,8 @@ mod tests {
         assert!(!rect_contains((-1920, 141), (32, 140), (-1930, 200)));
     }
 
-    #[test]
-    fn easing_starts_fast_and_ends_settled() {
-        assert_eq!(ease_out(0.0), 0.0);
-        assert_eq!(ease_out(1.0), 1.0);
-        // Past halfway by the time a third of the duration has run.
-        assert!(ease_out(0.33) > 0.5);
-        // And barely moving at the end, which is what reads as settling.
-        assert!(ease_out(1.0) - ease_out(0.9) < 0.01);
-    }
 
-    #[test]
-    fn easing_clamps_rather_than_overshooting() {
-        assert_eq!(ease_out(-1.0), 0.0);
-        assert_eq!(ease_out(2.0), 1.0);
-    }
 
-    #[test]
-    fn interpolation_starts_and_finishes_exactly() {
-        let nub = Rect { x: 2528, y: 650, width: 32, height: 140 };
-        let panel = Rect { x: 2040, y: 390, width: 520, height: 660 };
 
-        assert_eq!(interpolate(nub, panel, 0.0), nub);
-        // The last frame has to land on the target, not a pixel short of it.
-        assert_eq!(interpolate(nub, panel, 1.0), panel);
-    }
 
-    #[test]
-    fn interpolation_moves_monotonically_towards_the_target() {
-        let nub = Rect { x: 2528, y: 650, width: 32, height: 140 };
-        let panel = Rect { x: 2040, y: 390, width: 520, height: 660 };
-
-        let mut last = nub;
-        for step in 1..=10 {
-            let frame = interpolate(nub, panel, step as f64 / 10.0);
-            assert!(frame.width >= last.width, "width must not go backwards");
-            assert!(frame.x <= last.x, "x moves left towards the panel");
-            last = frame;
-        }
-    }
-
-    #[test]
-    fn interpolation_never_produces_a_zero_sized_window() {
-        // Collapsing to nothing mid-animation would flash the window away.
-        let from = Rect { x: 0, y: 0, width: 520, height: 660 };
-        let to = Rect { x: 0, y: 0, width: 1, height: 1 };
-        for step in 0..=10 {
-            let frame = interpolate(from, to, step as f64 / 10.0);
-            assert!(frame.width >= 1 && frame.height >= 1);
-        }
-    }
 }

@@ -327,8 +327,7 @@ pub fn run() {
                     rail::window::close_rail,
                     rail::window::place_rail,
                     rail::window::list_monitors,
-                    rail::window::cursor_over_rail,
-                    rail::window::animate_rail
+                    rail::window::cursor_over_rail
                 ])
                 .run(tauri::generate_context!())
                 .expect("error while running tauri application");

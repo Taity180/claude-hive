@@ -3,7 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { useTheme } from "./hooks/useTheme";
 import { useWebSocket } from "./hooks/useWebSocket";
-import { nubSize, useRailStore, withOpacity } from "./stores/railStore";
+import { isHorizontalAnchor, nubSize, useRailStore, withOpacity } from "./stores/railStore";
 import { RailNub } from "./components/RailNub";
 import { RailChrome } from "./components/RailChrome";
 import { RailPanes } from "./components/RailPanes";
@@ -60,6 +60,15 @@ export function Rail() {
   // The rail window is created hidden at startup, so this component mounts long
   // before it is on screen. Rust tells us when that changes; without it the
   // cursor-follow poll below would run all day against a hidden window.
+  // Which edge the reveal slides out of. The window no longer moves, so this is
+  // the only motion there is.
+  const anchorSide = isHorizontalAnchor(anchor)
+    ? anchor === "top"
+      ? "top"
+      : "bottom"
+    : anchor === "left" || anchor === "tl" || anchor === "bl"
+      ? "left"
+      : "right";
   const [onScreen, setOnScreen] = useState(false);
   // Whether the pointer is over the rail. Combined mode follows the cursor only
   // while it is not, so the window never moves under the hand using it.
@@ -93,21 +102,63 @@ export function Rail() {
   // side effect of its own resizing. A size the user dragged is already on
   // screen; the only case that needs a fresh placement is forgetting a size,
   // which the settings row does itself.
-  // Opening and collapsing are animated; everything else places at once. An
-  // anchor change is the user asking for a different edge, and sliding across
-  // the desktop to get there would read as the window escaping.
+  // Placement waits for the panel to be painted, then happens all at once.
+  //
+  // The flash on opening was never the geometry: it was the frosted backdrop,
+  // which the compositor paints the moment the window has size, arriving before
+  // the content did. Growing the window over a few frames hid that, but a
+  // 32px nub becoming a 520px panel is half a screen of travel — and hovering
+  // in and out left animations starting from each other's half-finished rects,
+  // so the window was permanently mid-sweep.
+  //
+  // Two frames is enough for React to have committed the panel and the webview
+  // to have painted it. Then the window resizes once, over content that is
+  // already there, and there is nothing to flash and nothing to travel.
   const wasOpen = useRef(open);
+  const frame = useRef<number | null>(null);
+  // Opening has two steps. The panel is rendered invisibly behind the nub first,
+  // so the webview rasterises it while the window is still 32px and nothing on
+  // screen changes; only then does the window resize and the panel appear. The
+  // frosted backdrop exists the moment the window has size, so content that is
+  // not ready yet is a blank frosted slab — the flash. Content that is already
+  // rasterised has nothing to catch up on.
+  // True at mount: a rail that is already open has nothing to hide, and only the
+  // opening transition needs the two-step.
+  const [revealed, setRevealed] = useState(true);
   useEffect(() => {
     if (!onScreen) return;
     const [width, height] = open ? currentSize() : nubSize(anchor, restingForm);
-    const transition = wasOpen.current !== open;
+    const opening = open && !wasOpen.current;
     wasOpen.current = open;
 
-    placeRail({ anchor, width, height, offset, monitor: pinnedMonitor }, transition).catch(
-      (err) => {
+    const place = () =>
+      placeRail({ anchor, width, height, offset, monitor: pinnedMonitor }).catch((err) => {
         console.error("[hive] placing the rail failed:", err);
-      }
-    );
+      });
+
+    if (!opening) {
+      setRevealed(true);
+      void place();
+      return;
+    }
+
+    let cancelled = false;
+    setRevealed(false);
+    const outer = requestAnimationFrame(() => {
+      const inner = requestAnimationFrame(() => {
+        if (cancelled) return;
+        void place();
+        // Same tick as the resize request: the panel is already rasterised, so
+        // showing it is a compositor change rather than a repaint.
+        setRevealed(true);
+      });
+      frame.current = inner;
+    });
+    frame.current = outer;
+    return () => {
+      cancelled = true;
+      if (frame.current !== null) cancelAnimationFrame(frame.current);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [onScreen, open, combined, anchor, offset, restingForm, pinnedMonitor]);
 
@@ -262,9 +313,22 @@ export function Rail() {
       data-testid="rail-root"
     >
       {open ? (
+        <>
+          {!revealed && (
+            // What the user still sees while the panel rasterises behind it.
+            <div className="absolute inset-0">
+              <RailNub onOpen={() => setOpen(true)} />
+            </div>
+          )}
         <div
-          className="flex flex-col rail-slide-in"
+          className={`flex flex-col ${revealed ? "rail-slide-in" : ""}`}
+          data-testid="rail-panel"
+          data-anchor-side={anchorSide}
           style={{
+            // Painted but not shown. opacity rather than `visibility`, which
+            // skips painting altogether and would leave nothing rasterised.
+            opacity: revealed ? 1 : 0,
+            pointerEvents: revealed ? undefined : "none",
             background: withOpacity("var(--hub-bg-solid, #141414)", panelOpacity),
             // Laid out for the final size rather than the window's current one,
             // so growing into place reveals the panel instead of reflowing it
@@ -292,6 +356,7 @@ export function Rail() {
           </div>
           <RailPanes />
         </div>
+        </>
       ) : (
         <RailNub onOpen={() => setOpen(true)} />
       )}

@@ -1,8 +1,7 @@
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use crate::rail::geometry::{
-    anchored_position, interpolate, primary_index, rect_contains, target_index, Anchor,
-    MonitorRect, Rect,
+    anchored_position, primary_index, rect_contains, target_index, Anchor, MonitorRect, Rect,
 };
 use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder};
 
@@ -193,21 +192,6 @@ fn warn_once(msg: &str) {
 /// Size and move `rail` against `anchor` on whichever monitor the cursor is on,
 /// falling back to the first monitor when the cursor sits in dead space between
 /// screens of different heights.
-/// How long the rail takes to grow open or fold away.
-///
-/// Short enough to feel immediate, long enough to read as movement rather than a
-/// jump. Also what hides the last of the opening flash: the frosted backdrop is
-/// painted by the compositor the moment the window has size, so a window that
-/// arrives at full size shows a blank frosted rectangle for a frame however
-/// quickly the content follows. Growing into place has nothing to flash.
-const ANIMATION_MS: u64 = 140;
-const FRAME_MS: u64 = 16;
-
-/// Which animation is current. A newer one supersedes whatever was running:
-/// hovering out and straight back in would otherwise leave two loops fighting
-/// over the same window.
-static ANIMATION: AtomicU64 = AtomicU64::new(0);
-
 /// Last monitor the rail was placed on, so a change can be logged without
 /// logging the four placements a second that do not move it.
 static LAST_MONITOR: AtomicU64 = AtomicU64::new(u64::MAX);
@@ -230,54 +214,6 @@ fn apply_rect(rail: &tauri::WebviewWindow, rect: Rect, growing: bool) -> Result<
     } else {
         rail.set_size(size).map_err(|e| e.to_string())?;
         rail.set_position(position).map_err(|e| e.to_string())
-    }
-}
-
-/// Move and resize the rail over `ANIMATION_MS`, from wherever it is now.
-async fn animate_to(rail: tauri::WebviewWindow, to: Rect) {
-    let Ok(origin) = rail.outer_position() else {
-        let _ = apply_rect(&rail, to, true);
-        return;
-    };
-    let Ok(size) = rail.outer_size() else {
-        let _ = apply_rect(&rail, to, true);
-        return;
-    };
-
-    let from = Rect {
-        x: origin.x,
-        y: origin.y,
-        width: size.width,
-        height: size.height,
-    };
-    if from == to {
-        return;
-    }
-    let growing = to.width > from.width || to.height > from.height;
-
-    diag(&format!(
-        "animate: {}x{} at ({}, {}) -> {}x{} at ({}, {})",
-        from.width, from.height, from.x, from.y, to.width, to.height, to.x, to.y
-    ));
-    let generation = ANIMATION.fetch_add(1, Ordering::SeqCst) + 1;
-    let frames = (ANIMATION_MS / FRAME_MS).max(1);
-
-    for frame in 1..=frames {
-        // Superseded: a later animation, or a placement that is not animating,
-        // owns the window now.
-        if ANIMATION.load(Ordering::SeqCst) != generation {
-            return;
-        }
-        let rect = interpolate(from, to, frame as f64 / frames as f64);
-        if apply_rect(&rail, rect, growing).is_err() {
-            return;
-        }
-        tokio::time::sleep(std::time::Duration::from_millis(FRAME_MS)).await;
-    }
-
-    // Land exactly on the target, whatever rounding did on the way.
-    if ANIMATION.load(Ordering::SeqCst) == generation {
-        let _ = apply_rect(&rail, to, growing);
     }
 }
 
@@ -331,103 +267,13 @@ fn position_rail(
         .map(|current| size.0 > current.width || size.1 > current.height)
         .unwrap_or(false);
 
-    // Any un-animated placement takes ownership, so a cursor-follow tick during
-    // an animation stops it rather than fighting it frame by frame.
-    ANIMATION.fetch_add(1, Ordering::SeqCst);
     apply_rect(rail, target, growing)
 }
 
-/// Where the rail is heading, without moving it there.
-fn resolve_rect(
-    app: &AppHandle,
-    rail: &tauri::WebviewWindow,
-    anchor: Anchor,
-    size: (u32, u32),
-    offset: i32,
-    pinned: Option<usize>,
-) -> Result<Rect, String> {
-    let monitors = monitor_rects(app)?;
-    if monitors.is_empty() {
-        return Err("no monitors reported".into());
-    }
-    let cursor = rail
-        .cursor_position()
-        .ok()
-        .map(|c| (c.x as i32, c.y as i32));
-    let index = target_index(&monitors, pinned, cursor);
-    let (x, y) = anchored_position(monitors[index], anchor, size, offset);
-    Ok(Rect {
-        x,
-        y,
-        width: size.0,
-        height: size.1,
-    })
-}
-
-#[cfg(test)]
-mod tests {
-    use super::RAIL_LABEL;
-
-    /// Capabilities are per-window in Tauri 2. A window missing from the
-    /// capability's `windows` list gets no core plugin access, so its webview
-    /// cannot invoke anything — and it fails silently, with no error in the
-    /// Rust log and only a console message inside a window you cannot see.
-    /// That exact omission shipped once; this test is why it cannot again.
-    #[test]
-    fn the_rail_window_is_granted_capabilities() {
-        let raw = include_str!("../../capabilities/default.json");
-        let parsed: serde_json::Value =
-            serde_json::from_str(raw).expect("capabilities/default.json must be valid JSON");
-
-        let windows = parsed["windows"]
-            .as_array()
-            .expect("capability must declare a windows list");
-        let labels: Vec<&str> = windows.iter().filter_map(|w| w.as_str()).collect();
-
-        assert!(
-            labels.contains(&RAIL_LABEL),
-            "the '{RAIL_LABEL}' window must be listed in capabilities/default.json, \
-             otherwise its webview cannot invoke commands. Found: {labels:?}"
-        );
-        assert!(
-            labels.contains(&"main"),
-            "the 'main' window must stay listed. Found: {labels:?}"
-        );
-    }
-}
-
-/// Move and size the existing rail. Called from the rail's own window, four
-/// times a second while cursor-follow is on.
-///
 /// Deliberately does not create the window: this runs on a command worker
 /// thread, where `build()` would deadlock, and a caller that has no rail has
 /// nothing to place. Resizing and moving an existing window is safe off the
 /// main thread — Tauri proxies both.
-/// Place the rail, growing or folding into position over a few frames.
-///
-/// Separate from `place_rail` rather than a flag on it: the cursor-follow poll
-/// must never animate — it would be a permanent slow drift instead of a move —
-/// and an async command that the poll accidentally called would queue animations
-/// four times a second.
-#[tauri::command]
-pub async fn animate_rail(
-    app: AppHandle,
-    anchor: String,
-    width: u32,
-    height: u32,
-    offset: i32,
-    monitor: Option<usize>,
-) -> Result<(), String> {
-    let anchor = Anchor::from_str_id(&anchor).ok_or_else(|| format!("unknown anchor: {anchor}"))?;
-    let Some(rail) = app.get_webview_window(RAIL_LABEL) else {
-        return Ok(());
-    };
-
-    let target = resolve_rect(&app, &rail, anchor, (width, height), offset, monitor)?;
-    animate_to(rail, target).await;
-    Ok(())
-}
-
 #[tauri::command]
 pub fn place_rail(
     app: AppHandle,

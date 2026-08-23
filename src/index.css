@@ -94,17 +94,41 @@ html[data-window="rail"] #root {
   display: none;
 }
 
-/* The window itself now grows from the nub into the panel's rect, which is the
-   motion the eye tracks. All this has to do is bring the content up as the
-   window arrives — a translate on top of a growing window reads as two separate
-   things moving. Matches ANIMATION_MS in rail/window.rs. */
-@keyframes rail-fade-in {
-  from { opacity: 0; }
-  to   { opacity: 1; }
+/* A drawer reveal: the content slides out of the edge it is anchored to and
+   fades up, over a window that is already the right size and already painted.
+   Nothing here moves the window, which is what made the old version read as
+   the whole thing travelling across the screen.
+
+   180ms on cubic-bezier(0.16, 1, 0.3, 1) — most of the distance covered early,
+   settling rather than stopping. */
+@keyframes rail-reveal-from-right {
+  from { opacity: 0; transform: translateX(20px); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes rail-reveal-from-left {
+  from { opacity: 0; transform: translateX(-20px); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes rail-reveal-from-top {
+  from { opacity: 0; transform: translateY(-20px); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes rail-reveal-from-bottom {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: none; }
 }
 
 .rail-slide-in {
-  animation: rail-fade-in 140ms ease-out;
+  animation: rail-reveal-from-right 180ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.rail-slide-in[data-anchor-side="left"] {
+  animation-name: rail-reveal-from-left;
+}
+.rail-slide-in[data-anchor-side="top"] {
+  animation-name: rail-reveal-from-top;
+}
+.rail-slide-in[data-anchor-side="bottom"] {
+  animation-name: rail-reveal-from-bottom;
 }
 
 @media (prefers-reduced-motion: reduce) {
