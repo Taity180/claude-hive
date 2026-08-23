@@ -1,9 +1,12 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { setTaskDone } = vi.hoisted(() => ({ setTaskDone: vi.fn() }));
-vi.mock("../agentApi", () => ({ setTaskDone }));
+const { setTaskDone, addTaskNote } = vi.hoisted(() => ({
+  setTaskDone: vi.fn(),
+  addTaskNote: vi.fn(),
+}));
+vi.mock("../agentApi", () => ({ setTaskDone, addTaskNote }));
 
 import { TaskRow } from "./TaskRow";
 import type { Task } from "../types";
@@ -30,6 +33,7 @@ function task(overrides: Partial<Task> = {}): Task {
 describe("TaskRow", () => {
   beforeEach(() => {
     setTaskDone.mockReset().mockResolvedValue(true);
+    addTaskNote.mockReset().mockResolvedValue(true);
   });
 
   it("shows the title and where it came from", () => {
@@ -109,9 +113,36 @@ describe("TaskRow", () => {
     expect(screen.getByText("Ops")).toBeInTheDocument();
   });
 
-  it("offers no notes toggle when there are none", () => {
+  it("offers a way in even with no notes yet", () => {
+    // Without this there is no route to the composer at all: the toggle only
+    // appeared once a note existed, so the first note could never be written.
     render(<TaskRow task={task()} />);
-    expect(screen.queryByTestId("task-notes-toggle")).toBeNull();
+    expect(screen.getByTestId("task-notes-toggle")).toHaveTextContent(/add note/i);
+  });
+
+  it("adds a note and clears the field", async () => {
+    render(<TaskRow task={task()} />);
+    await userEvent.click(screen.getByTestId("task-notes-toggle"));
+    await userEvent.type(screen.getByTestId("task-note-input"), "waiting on the export{Enter}");
+
+    expect(addTaskNote).toHaveBeenCalledWith("t1", "waiting on the export");
+    await waitFor(() => expect(screen.getByTestId("task-note-input")).toHaveValue(""));
+  });
+
+  it("will not add a blank note", async () => {
+    render(<TaskRow task={task()} />);
+    await userEvent.click(screen.getByTestId("task-notes-toggle"));
+    await userEvent.type(screen.getByTestId("task-note-input"), "   {Enter}");
+    expect(addTaskNote).not.toHaveBeenCalled();
+  });
+
+  it("keeps the text when adding a note fails", async () => {
+    addTaskNote.mockResolvedValue(false);
+    render(<TaskRow task={task()} />);
+    await userEvent.click(screen.getByTestId("task-notes-toggle"));
+    await userEvent.type(screen.getByTestId("task-note-input"), "important{Enter}");
+    await waitFor(() => expect(addTaskNote).toHaveBeenCalled());
+    expect(screen.getByTestId("task-note-input")).toHaveValue("important");
   });
 
   it("marks an overdue date so it reads as late", () => {

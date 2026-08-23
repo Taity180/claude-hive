@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { setTaskDone } from "../agentApi";
+import { addTaskNote, setTaskDone } from "../agentApi";
 import { AppIcon } from "./AppIcon";
 import type { Task } from "../types";
 
@@ -29,6 +29,7 @@ function dueLabel(due: string | null): { text: string; late: boolean } | null {
 export function TaskRow({ task }: { task: Task }) {
   const [notesOpen, setNotesOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [noteDraft, setNoteDraft] = useState("");
   const due = dueLabel(task.due);
   const isLate = (due?.late ?? false) && !task.done;
   const agentCompleted = task.completedBy?.kind === "agent" ? task.completedBy : null;
@@ -38,6 +39,14 @@ export function TaskRow({ task }: { task: Task }) {
     setBusy(true);
     await setTaskDone(task.id, !task.done);
     setBusy(false);
+  };
+
+  const submitNote = async () => {
+    const body = noteDraft.trim();
+    if (!body) return;
+    const ok = await addTaskNote(task.id, body);
+    // Only clear on success, so a failed request does not eat what they wrote.
+    if (ok) setNoteDraft("");
   };
 
   return (
@@ -125,24 +134,28 @@ export function TaskRow({ task }: { task: Task }) {
             </span>
           )}
 
-          {task.notes.length > 0 && (
-            <button
-              type="button"
-              data-testid="task-notes-toggle"
-              aria-expanded={notesOpen}
-              onClick={() => setNotesOpen((open) => !open)}
-              className="text-[9.5px] rounded px-1.5 py-0.5"
-              style={{
-                background: "var(--hub-surface)",
-                border: 0,
-                color: "var(--hub-text-muted)",
-                cursor: "pointer",
-              }}
-            >
-              {notesOpen ? "▾" : "▸"} {task.notes.length} note
-              {task.notes.length === 1 ? "" : "s"}
-            </button>
-          )}
+          {/* Always rendered. When it only appeared once a note existed, there
+              was no route to the composer, so the first note could never be
+              written. */}
+          <button
+            type="button"
+            data-testid="task-notes-toggle"
+            aria-expanded={notesOpen}
+            onClick={() => setNotesOpen((open) => !open)}
+            className="text-[9.5px] rounded px-1.5 py-0.5"
+            style={{
+              background: "var(--hub-surface)",
+              border: 0,
+              color: "var(--hub-text-muted)",
+              cursor: "pointer",
+            }}
+          >
+            {task.notes.length === 0
+              ? "+ Add note"
+              : `${notesOpen ? "▾" : "▸"} ${task.notes.length} note${
+                  task.notes.length === 1 ? "" : "s"
+                }`}
+          </button>
         </div>
 
         {notesOpen && (
@@ -169,6 +182,27 @@ export function TaskRow({ task }: { task: Task }) {
                 {note.body}
               </div>
             ))}
+
+            <input
+              data-testid="task-note-input"
+              value={noteDraft}
+              placeholder="Add a note&hellip;"
+              onChange={(e) => setNoteDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  void submitNote();
+                }
+              }}
+              className="text-[11px] rounded px-2 py-1.5"
+              style={{
+                background: "rgba(0,0,0,0.18)",
+                border: 0,
+                boxShadow: "inset 0 0 0 1px var(--hub-hair)",
+                color: "var(--hub-text)",
+                outline: "none",
+              }}
+            />
           </div>
         )}
       </div>
