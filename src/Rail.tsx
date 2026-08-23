@@ -3,7 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { useTheme } from "./hooks/useTheme";
 import { useWebSocket } from "./hooks/useWebSocket";
-import { useRailStore } from "./stores/railStore";
+import { isHorizontalAnchor, nubSize, useRailStore } from "./stores/railStore";
 import { RailNub } from "./components/RailNub";
 import { RailPanel } from "./components/RailPanel";
 import { AgentsPane } from "./components/AgentsPane";
@@ -12,12 +12,6 @@ import { RailChrome } from "./components/RailChrome";
 import { RailSettingsPane } from "./components/RailSettingsPane";
 import { useAgentData } from "./hooks/useAgentData";
 import { useRailResize } from "./hooks/useRailResize";
-
-// Closed, the rail is a strip; open, it is the remembered size for this edge.
-const NUB_SIZE: Record<"nub" | "sliver", [number, number]> = {
-  nub: [32, 140],
-  sliver: [14, 110],
-};
 
 export function Rail() {
   useTheme();
@@ -40,7 +34,13 @@ export function Rail() {
   // cursor-follow poll below would run all day against a hidden window.
   const [pane, setPane] = useState<"feed" | "tasks" | "agents" | "settings">("feed");
   // Which edge the panel grows from, so the slide-in runs the right way.
-  const anchorSide = anchor === "left" || anchor === "tl" || anchor === "bl" ? "left" : "right";
+  const anchorSide = isHorizontalAnchor(anchor)
+    ? anchor === "top"
+      ? "top"
+      : "bottom"
+    : anchor === "left" || anchor === "tl" || anchor === "bl"
+      ? "left"
+      : "right";
   const [onScreen, setOnScreen] = useState(false);
   useEffect(() => {
     const stop = listen<boolean>("rail-visibility", (e) => setOnScreen(e.payload));
@@ -66,7 +66,7 @@ export function Rail() {
   // so a per-anchor resize takes effect without waiting for another trigger.
   useEffect(() => {
     if (!onScreen || combined) return;
-    const [width, height] = open ? currentSize() : NUB_SIZE[restingForm];
+    const [width, height] = open ? currentSize() : nubSize(anchor, restingForm);
     invoke("place_rail", { anchor, width, height, offset }).catch((err) => {
       console.error("[hive] place_rail failed:", err);
     });
@@ -87,7 +87,7 @@ export function Rail() {
   // yanks out from under a click.
   useEffect(() => {
     if (!onScreen || combined || !followCursor || open) return;
-    const [width, height] = NUB_SIZE[restingForm];
+    const [width, height] = nubSize(anchor, restingForm);
     const id = window.setInterval(() => {
       invoke("place_rail", { anchor, width, height, offset }).catch(() => {
         // A transient failure during a display change should not kill the

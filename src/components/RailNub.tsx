@@ -1,5 +1,5 @@
 import { useHubStore } from "../stores/hubStore";
-import { useRailStore } from "../stores/railStore";
+import { isHorizontalAnchor, useRailStore } from "../stores/railStore";
 import { badgeCorner } from "./railBadge";
 import type { SessionStatus } from "../types";
 
@@ -52,6 +52,9 @@ export function RailNub({ onOpen }: { onOpen: () => void }) {
   // Dimmed, not hidden. A rail that vanishes entirely is one the user cannot
   // find again without going back to the Hive window.
   const dimmed = hideWhenIdle && isIdle;
+  // The rail is the same strip on any edge, just lying down on a horizontal
+  // one — so its contents run along the edge rather than across it.
+  const horizontal = isHorizontalAnchor(anchor);
 
   return (
     <button
@@ -62,10 +65,13 @@ export function RailNub({ onOpen }: { onOpen: () => void }) {
       // edge would open the panel by accident.
       onMouseEnter={openOn === "hover" ? onOpen : undefined}
       data-dimmed={dimmed ? "true" : undefined}
+      data-orientation={horizontal ? "horizontal" : "vertical"}
       aria-label={
         unreadCount > 0 ? `Open Hive rail, ${unreadCount} unread` : "Open Hive rail"
       }
-      className="relative h-screen w-screen flex flex-col items-center justify-center gap-2 hub-material"
+      className={`relative h-screen w-screen flex items-center justify-center gap-2 hub-material ${
+        horizontal ? "flex-row" : "flex-col"
+      }`}
       style={{
         background: "var(--hub-bg, rgba(20,20,20,0.75))",
         backdropFilter: "var(--hub-blur, blur(30px) saturate(180%))",
@@ -147,7 +153,7 @@ export function RailNub({ onOpen }: { onOpen: () => void }) {
       {openTasks > 0 && (
         <span
           data-testid="nub-task-count"
-          className="flex flex-col items-center"
+          className={`flex items-center ${horizontal ? "flex-row gap-0.5" : "flex-col"}`}
           style={{ color: "var(--hub-text-muted)", fontSize: 9.5, lineHeight: 1.1 }}
         >
           {!isSliver && <span aria-hidden="true">✓</span>}

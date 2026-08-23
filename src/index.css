@@ -112,3 +112,28 @@ body,
 [data-testid="rail-nub"][data-dimmed="true"]:hover {
   opacity: 1 !important;
 }
+
+/* A rail on a horizontal edge slides along the other axis, so the panel still
+   appears to grow out of the edge it rests against. */
+@keyframes rail-slide-from-top {
+  from { opacity: 0; transform: translateY(-14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes rail-slide-from-bottom {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.rail-slide-in[data-anchor-side="top"] {
+  animation: rail-slide-from-top 180ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+.rail-slide-in[data-anchor-side="bottom"] {
+  animation: rail-slide-from-bottom 180ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rail-slide-in[data-anchor-side="top"],
+  .rail-slide-in[data-anchor-side="bottom"] {
+    animation: none;
+  }
+}

@@ -23,9 +23,40 @@ export const RAIL_STORAGE_KEY = "claude-hive-rail.v2";
 
 const HORIZONTAL: AnchorId[] = ["top", "bottom"];
 
+/**
+ * Whether the rail lies along a horizontal edge, and is therefore wide rather
+ * than tall.
+ *
+ * Corners count as vertical: a corner rail hugs a side, so a tall strip reads
+ * correctly there. Only a rail centred on the top or bottom edge is genuinely
+ * wide.
+ */
+export function isHorizontalAnchor(anchor: AnchorId): boolean {
+  return HORIZONTAL.includes(anchor);
+}
+
 /** A rail on a horizontal edge is wide; on a vertical edge it is tall. */
 function defaultSize(anchor: AnchorId): [number, number] {
-  return HORIZONTAL.includes(anchor) ? [820, 280] : [372, 620];
+  return isHorizontalAnchor(anchor) ? [820, 280] : [372, 620];
+}
+
+/** The resting strip's dimensions, on the short axis of whichever edge it rests against. */
+const NUB_THICKNESS: Record<RestingForm, [number, number]> = {
+  // [thickness across the edge, length along it]
+  nub: [32, 140],
+  sliver: [14, 110],
+};
+
+/**
+ * Window size for the resting rail.
+ *
+ * Swapped on a horizontal edge rather than given its own numbers: the rail is
+ * the same strip either way, just lying down. Before this it stayed 32×140 on
+ * the top and bottom edges — a vertical strip against a horizontal edge.
+ */
+export function nubSize(anchor: AnchorId, form: RestingForm): [number, number] {
+  const [thickness, length] = NUB_THICKNESS[form];
+  return isHorizontalAnchor(anchor) ? [length, thickness] : [thickness, length];
 }
 
 interface Persisted {

@@ -198,4 +198,24 @@ describe("RailNub", () => {
     render(<RailNub onOpen={vi.fn()} />);
     expect(screen.getByTestId("rail-nub")).not.toHaveAttribute("data-dimmed");
   });
+
+  it("lays its contents out along the edge it rests against", () => {
+    // The bug: a top-anchored rail is wide and short, but the nub still
+    // stacked its dots vertically, so they overflowed a 32px-tall window.
+    useRailStore.setState({ anchor: "top" });
+    render(<RailNub onOpen={vi.fn()} />);
+    expect(screen.getByTestId("rail-nub")).toHaveAttribute("data-orientation", "horizontal");
+  });
+
+  it("stacks vertically on a side edge", () => {
+    useRailStore.setState({ anchor: "right" });
+    render(<RailNub onOpen={vi.fn()} />);
+    expect(screen.getByTestId("rail-nub")).toHaveAttribute("data-orientation", "vertical");
+  });
+
+  it("treats a corner as vertical", () => {
+    useRailStore.setState({ anchor: "br" });
+    render(<RailNub onOpen={vi.fn()} />);
+    expect(screen.getByTestId("rail-nub")).toHaveAttribute("data-orientation", "vertical");
+  });
 });
