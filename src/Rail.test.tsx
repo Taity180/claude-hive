@@ -524,4 +524,16 @@ describe("Rail", () => {
       vi.useRealTimers();
     }
   });
+
+  it("asks about the gap as well as the rail when checking for a hover", () => {
+    // The offset holds the rail off the bezel, and that gap is dead space the
+    // cursor crosses to reach it — so running to the screen edge missed.
+    useRailStore.setState({ open: false, openOn: "hover", anchor: "right", offset: 22 });
+    render(<Rail />);
+
+    return vi.waitFor(() => {
+      const asked = invokeMock.mock.calls.find((c) => c[0] === "cursor_over_rail");
+      expect(asked?.[1]).toMatchObject({ anchor: "right", offset: 22 });
+    });
+  });
 });

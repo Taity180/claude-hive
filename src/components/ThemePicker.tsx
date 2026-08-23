@@ -24,16 +24,12 @@ export function ThemePicker({ currentThemeId, onSelect }: ThemePickerProps) {
                 : "1px solid var(--hub-border)",
           }}
         >
-          <div className="flex gap-1">
-            <span
-              className="w-3 h-3 rounded-full"
-              style={{ background: theme.bgSolid }}
-            />
-            <span
-              className="w-3 h-3 rounded-full"
-              style={{ background: theme.accent }}
-            />
-          </div>
+          {/* One swatch, because one thing varies. The surfaces are the same
+              dark glass under every accent. */}
+          <span
+            className="w-3 h-3 rounded-full shrink-0"
+            style={{ background: theme.accent }}
+          />
           <span
             className="text-[11px]"
             style={{

@@ -545,3 +545,28 @@ The only motion left is a **content-level drawer reveal** — 180ms, opacity 0�
 20px translate out of the anchored edge, `cubic-bezier(0.16, 1, 0.3, 1)`. In CSS
 rather than Framer Motion: identical output, and the dependency would be ~40KB
 for one transition.
+
+### One palette, ten accents
+
+A theme used to redefine every surface — ground, surface, border, text, blur — so
+choosing a colour changed the app's character and the "glass" look was ten
+different looks. Now the surfaces are fixed dark glass (translucent neutral,
+hairlines at 10% white) and a theme contributes only the **accent** that marks
+what you are on, plus the tint on a row that is blocked on you. The picker shows
+one swatch, because one thing varies.
+
+`--hub-bg-solid` stays opaque on purpose: the rail's opacity setting decides how
+much desktop shows through, and multiplying two alphas would make that slider
+mean something different at each end. The in-page blur is only for layers that
+genuinely sit over other page content, like Hive's usage breakdown —
+`backdrop-filter` samples the page, not the screen, which is what the acrylic
+backdrop was for and why removing it ended the opening flash.
+
+### The edge gap is part of the target
+
+The offset holds the rail clear of the bezel, and that gap was dead space:
+running the cursor to the very edge of the screen — which is the whole gesture —
+landed in it and nothing happened. `hover_rect` grows the hover test towards the
+anchored edge by the offset, so the gap counts as the rail. Corners grow on both
+axes. The offset itself is capped at 100px, past which the rail stops reading as
+docked to an edge at all.

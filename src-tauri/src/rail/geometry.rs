@@ -104,6 +104,47 @@ pub fn rect_contains(origin: (i32, i32), size: (u32, u32), point: (i32, i32)) ->
     px >= x && px < x + w as i32 && py >= y && py < y + h as i32
 }
 
+/// The rect a hover counts in: the rail, plus the gap it is inset by.
+///
+/// The offset holds the rail clear of the bezel, and that gap is dead space the
+/// cursor has to cross to reach it — so running the cursor to the very edge of
+/// the screen, which is the whole gesture, missed. Growing the rect towards the
+/// anchored edge by the offset makes the gap part of the target.
+pub fn hover_rect(rail: Rect, anchor: Anchor, offset: i32) -> Rect {
+    let gap = offset.max(0) as u32;
+    match anchor {
+        // Horizontal edges are inset vertically, vertical edges horizontally.
+        // A corner is inset on both, and grows on both.
+        Anchor::Top => Rect { y: rail.y - gap as i32, height: rail.height + gap, ..rail },
+        Anchor::Bottom => Rect { height: rail.height + gap, ..rail },
+        Anchor::Left => Rect { x: rail.x - gap as i32, width: rail.width + gap, ..rail },
+        Anchor::Right => Rect { width: rail.width + gap, ..rail },
+        Anchor::TopLeft => Rect {
+            x: rail.x - gap as i32,
+            y: rail.y - gap as i32,
+            width: rail.width + gap,
+            height: rail.height + gap,
+        },
+        Anchor::TopRight => Rect {
+            y: rail.y - gap as i32,
+            width: rail.width + gap,
+            height: rail.height + gap,
+            ..rail
+        },
+        Anchor::BottomLeft => Rect {
+            x: rail.x - gap as i32,
+            width: rail.width + gap,
+            height: rail.height + gap,
+            ..rail
+        },
+        Anchor::BottomRight => Rect {
+            width: rail.width + gap,
+            height: rail.height + gap,
+            ..rail
+        },
+    }
+}
+
 /// Which monitor the rail belongs on.
 ///
 /// A pin wins outright: the user asked for that screen, so a cursor on another
@@ -345,4 +386,37 @@ mod tests {
 
 
 
+
+    #[test]
+    fn the_hover_rect_swallows_the_edge_gap() {
+        // Running the cursor to the very edge of the screen is the gesture; the
+        // gap that holds the rail off the bezel used to swallow it.
+        let rail = Rect { x: 2514, y: 650, width: 32, height: 140 };
+
+        let right = hover_rect(rail, Anchor::Right, 14);
+        assert_eq!(right.x, 2514, "the near edge does not move");
+        assert_eq!(right.width, 46, "it reaches the screen edge");
+        assert!(rect_contains((right.x, right.y), (right.width, right.height), (2559, 700)));
+
+        let left = hover_rect(Rect { x: 14, ..rail }, Anchor::Left, 14);
+        assert_eq!(left.x, 0, "and on the left it grows the other way");
+        assert_eq!(left.width, 46);
+        assert!(rect_contains((left.x, left.y), (left.width, left.height), (0, 700)));
+    }
+
+    #[test]
+    fn a_corner_hover_rect_grows_on_both_axes() {
+        let rail = Rect { x: 14, y: 14, width: 32, height: 140 };
+        let grown = hover_rect(rail, Anchor::TopLeft, 14);
+        assert_eq!((grown.x, grown.y), (0, 0));
+        assert_eq!((grown.width, grown.height), (46, 154));
+    }
+
+    #[test]
+    fn no_offset_leaves_the_hover_rect_alone() {
+        let rail = Rect { x: 2528, y: 650, width: 32, height: 140 };
+        assert_eq!(hover_rect(rail, Anchor::Right, 0), rail);
+        // And a nonsense negative offset cannot shrink it.
+        assert_eq!(hover_rect(rail, Anchor::Right, -20), rail);
+    }
 }

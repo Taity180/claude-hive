@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { useTheme } from "../hooks/useTheme";
 import { ThemePicker } from "./ThemePicker";
 import { useHubStore } from "../stores/hubStore";
-import { MIN_OPACITY, sizeKey, useRailStore, type AnchorId } from "../stores/railStore";
+import { MAX_OFFSET, MIN_OPACITY, sizeKey, useRailStore, type AnchorId } from "../stores/railStore";
 import { AppIcon } from "./AppIcon";
 
 /** The 3×3 grid, reading order, with the inert centre as null. */
@@ -353,7 +353,10 @@ export function RailSettingsPane({ section }: { section: SettingsSection }) {
           </Row>
 
           <Row>
-            <Label title="Edge offset" hint="Gap from the monitor edge." />
+            <Label
+              title="Edge offset"
+              hint="Gap from the monitor edge. Hovering the gap opens the rail too."
+            />
             <span className="flex items-center gap-1 shrink-0">
               <button
                 type="button"
@@ -383,7 +386,7 @@ export function RailSettingsPane({ section }: { section: SettingsSection }) {
               <button
                 type="button"
                 aria-label="Increase edge offset"
-                onClick={() => setOffset(offset + 1)}
+                onClick={() => setOffset(Math.min(MAX_OFFSET, offset + 1))}
                 className="grid place-items-center text-[12px]"
                 style={{
                   width: 20,

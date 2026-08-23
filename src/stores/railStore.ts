@@ -75,6 +75,14 @@ export function isHorizontalAnchor(anchor: AnchorId): boolean {
 /** Floor on opacity, so the rail cannot be made invisible and unfindable. */
 export const MIN_OPACITY = 0.3;
 
+/**
+ * Furthest the rail can sit from the monitor edge.
+ *
+ * A gap this big is a deliberate inset, not a nudge off the bezel. Past it the
+ * rail stops reading as docked to the edge at all.
+ */
+export const MAX_OFFSET = 100;
+
 export function clampOpacity(value: number): number {
   if (!Number.isFinite(value)) return 1;
   return Math.min(1, Math.max(MIN_OPACITY, value));
@@ -283,7 +291,9 @@ export const useRailStore = create<RailState>((set, get) => {
       persist();
       broadcastRailSettings({ anchor });
     },
-    setOffset: (offset) => {
+    setOffset: (value) => {
+      // Clamped here rather than at the buttons, so every route in agrees.
+      const offset = Math.min(MAX_OFFSET, Math.max(0, Math.round(value) || 0));
       set({ offset });
       persist();
       broadcastRailSettings({ offset });

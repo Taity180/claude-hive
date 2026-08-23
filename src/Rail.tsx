@@ -254,7 +254,9 @@ export function Rail() {
 
     let cancelled = false;
     const id = window.setInterval(() => {
-      void invoke<boolean>("cursor_over_rail")
+      // The anchor and offset go with it: the gap the rail is inset by counts
+      // as part of the target, so running the cursor to the screen edge works.
+      void invoke<boolean>("cursor_over_rail", { anchor, offset })
         .then((over) => {
           if (cancelled) return;
           setPointerInside(over);
@@ -301,7 +303,7 @@ export function Rail() {
       window.clearInterval(id);
       cancelClose();
     };
-  }, [onScreen, hoverDrives, followCursor, cancelClose, setOpen]);
+  }, [onScreen, hoverDrives, followCursor, anchor, offset, cancelClose, setOpen]);
 
   // The rail is a decorationless window, so the title bar has to move it. Same
   // handler Hive's own bar uses; buttons are excluded or dragging would eat the

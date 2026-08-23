@@ -5,6 +5,7 @@ import {
   useRailStore,
   withOpacity,
   RAIL_STORAGE_KEY,
+  MAX_OFFSET,
   MIN_OPACITY,
 } from "./railStore";
 
@@ -161,5 +162,15 @@ describe("railStore", () => {
     expect(state.lastPane).toBe("activity");
     // The rest of the stored settings survive the one bad field.
     expect(state.anchor).toBe("left");
+  });
+
+  it("caps the edge offset, and refuses a negative one", () => {
+    // Past a certain gap the rail stops reading as docked to the edge at all.
+    useRailStore.getState().setOffset(400);
+    expect(useRailStore.getState().offset).toBe(MAX_OFFSET);
+    useRailStore.getState().setOffset(-10);
+    expect(useRailStore.getState().offset).toBe(0);
+    useRailStore.getState().setOffset(37);
+    expect(useRailStore.getState().offset).toBe(37);
   });
 });

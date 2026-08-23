@@ -1,7 +1,8 @@
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use crate::rail::geometry::{
-    anchored_position, primary_index, rect_contains, target_index, Anchor, MonitorRect, Rect,
+    anchored_position, hover_rect, primary_index, rect_contains, target_index, Anchor,
+    MonitorRect, Rect,
 };
 use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder};
 
@@ -345,7 +346,11 @@ pub fn place_rail(
 /// Asking for the cursor and the window rect is the same question without the
 /// accident.
 #[tauri::command]
-pub fn cursor_over_rail(app: AppHandle) -> Result<bool, String> {
+pub fn cursor_over_rail(
+    app: AppHandle,
+    anchor: Option<String>,
+    offset: Option<i32>,
+) -> Result<bool, String> {
     let Some(rail) = app.get_webview_window(RAIL_LABEL) else {
         return Ok(false);
     };
@@ -354,9 +359,25 @@ pub fn cursor_over_rail(app: AppHandle) -> Result<bool, String> {
     let origin = rail.outer_position().map_err(|e| e.to_string())?;
     let size = rail.outer_size().map_err(|e| e.to_string())?;
 
+    let mut rect = Rect {
+        x: origin.x,
+        y: origin.y,
+        width: size.width,
+        height: size.height,
+    };
+
+    // The gap the offset holds the rail off the bezel by counts as the rail.
+    // Running the cursor to the edge of the screen is the gesture, and without
+    // this it landed in dead space and nothing happened.
+    if let (Some(anchor), Some(offset)) = (anchor.as_deref(), offset) {
+        if let Some(anchor) = Anchor::from_str_id(anchor) {
+            rect = hover_rect(rect, anchor, offset);
+        }
+    }
+
     Ok(rect_contains(
-        (origin.x, origin.y),
-        (size.width, size.height),
+        (rect.x, rect.y),
+        (rect.width, rect.height),
         (cursor.x as i32, cursor.y as i32),
     ))
 }
