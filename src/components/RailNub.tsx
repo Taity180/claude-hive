@@ -1,5 +1,5 @@
 import { useHubStore } from "../stores/hubStore";
-import { isHorizontalAnchor, useRailStore } from "../stores/railStore";
+import { isHorizontalAnchor, useRailStore, withOpacity } from "../stores/railStore";
 import { badgeCorner } from "./railBadge";
 import type { SessionStatus } from "../types";
 
@@ -32,6 +32,7 @@ export function RailNub({ onOpen }: { onOpen: () => void }) {
   const anchor = useRailStore((s) => s.anchor);
   const openOn = useRailStore((s) => s.openOn);
   const hideWhenIdle = useRailStore((s) => s.hideWhenIdle);
+  const panelOpacity = useRailStore((s) => s.panelOpacity);
 
   const present = STATUS_ORDER.filter((status) =>
     sessions.some((s) => s.status === status)
@@ -88,7 +89,8 @@ export function RailNub({ onOpen }: { onOpen: () => void }) {
         horizontal ? "flex-row" : "flex-col"
       }`}
       style={{
-        background: "var(--hub-bg, rgba(20,20,20,0.75))",
+        // The resting strip is the window, so it follows the window setting.
+        background: withOpacity("var(--hub-bg-solid, #141414)", panelOpacity),
         backdropFilter: "var(--hub-blur, blur(30px) saturate(180%))",
         border: 0,
         borderRadius: 0,

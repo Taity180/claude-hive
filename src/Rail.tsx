@@ -3,7 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { useTheme } from "./hooks/useTheme";
 import { useWebSocket } from "./hooks/useWebSocket";
-import { isHorizontalAnchor, nubSize, useRailStore } from "./stores/railStore";
+import { isHorizontalAnchor, nubSize, useRailStore, withOpacity } from "./stores/railStore";
 import { RailNub } from "./components/RailNub";
 import { RailChrome } from "./components/RailChrome";
 import { RailPanes } from "./components/RailPanes";
@@ -41,6 +41,7 @@ export function Rail() {
   const followCursor = useRailStore((s) => s.followCursor);
   const openOn = useRailStore((s) => s.openOn);
   const pinnedMonitor = useRailStore((s) => s.pinnedMonitor);
+  const panelOpacity = useRailStore((s) => s.panelOpacity);
   const currentSize = useRailStore((s) => s.currentSize);
   const sizes = useRailStore((s) => s.sizes);
   const combined = useRailStore((s) => s.combined);
@@ -203,10 +204,11 @@ export function Rail() {
   return (
     <div
       className="h-screen w-screen overflow-hidden hub-material"
-      // Always a solid ground. The window is not a transparent window, so
-      // "transparent" here renders as white — which is exactly what a
-      // not-yet-painted rail looked like while this feature was being debugged.
-      style={{ background: "var(--hub-bg-solid, #141414)" }}
+      // No ground of its own: each surface below paints once, at its own
+      // opacity, so the panel and sidebar settings stay independent of each
+      // other. The window itself is transparent, which is what lets an alpha
+      // here show the desktop rather than rendering white.
+      style={{ background: "transparent" }}
       data-testid="rail-root"
       onMouseLeave={() => {
         setPointerInside(false);
@@ -218,7 +220,11 @@ export function Rail() {
       }}
     >
       {open ? (
-        <div className="flex flex-col h-full rail-slide-in" data-anchor-side={anchorSide}>
+        <div
+          className="flex flex-col h-full rail-slide-in"
+          data-anchor-side={anchorSide}
+          style={{ background: withOpacity("var(--hub-bg-solid, #141414)", panelOpacity) }}
+        >
           <div
             data-tauri-drag-region
             onMouseDown={startDrag}

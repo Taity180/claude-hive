@@ -415,3 +415,21 @@ no longer reach anybody.
 Answering is keyed on the question id, not the agent: by the time a click lands the agent may have asked
 something else, and answering whatever is current would attribute the choice to the wrong question. First
 answer wins, so two windows showing the same question cannot double-answer it.
+
+### Opacity
+
+Two settings, not one: **window** and **sidebar**. The sidebar is a constant and
+can afford to be more solid than the content beside it, which a single slider
+could not express.
+
+Each surface paints its ground exactly once — the root paints nothing — so the
+two settings stay independent. Painting the root as well would stack the panel's
+alpha underneath the sidebar's and make one setting depend on the other.
+
+The rail window is created **transparent** for this. On an opaque window a
+translucent page renders white, which is what the rail looked like during phase
+2 while it was being debugged; the window has to allow alpha even though it
+paints a solid ground at the default of 100%.
+
+Floored at 30%. A rail faded to nothing is one the user cannot find again —
+the same reasoning as dimming rather than hiding when idle.

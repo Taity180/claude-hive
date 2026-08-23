@@ -64,6 +64,12 @@ pub fn create_hidden(app: &AppHandle) {
         .title("Hive Rail")
         .inner_size(DEFAULT_NUB.0 as f64, DEFAULT_NUB.1 as f64)
         .decorations(false)
+        // Transparent so the CSS alpha behind the opacity settings means
+        // something. On an opaque window a translucent page renders white —
+        // which is exactly what the rail looked like while this was being
+        // debugged — so the window has to allow it, even though it paints a
+        // solid ground at the default of full opacity.
+        .transparent(true)
         .always_on_top(true)
         .skip_taskbar(true)
         .resizable(true)

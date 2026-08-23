@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -165,5 +165,25 @@ describe("RailSettingsPane", () => {
     await waitFor(() =>
       expect((screen.getByTestId("pinned-monitor") as HTMLSelectElement).options.length).toBe(1)
     );
+  });
+
+  it("sets the window and sidebar opacity independently", async () => {
+    render(<RailSettingsPane />);
+    const window = screen.getByLabelText("Window opacity");
+    const sidebar = screen.getByLabelText("Sidebar opacity");
+
+    fireEvent.change(window, { target: { value: "60" } });
+    expect(useRailStore.getState().panelOpacity).toBeCloseTo(0.6);
+    expect(useRailStore.getState().sidebarOpacity).toBe(1);
+
+    fireEvent.change(sidebar, { target: { value: "85" } });
+    expect(useRailStore.getState().sidebarOpacity).toBeCloseTo(0.85);
+    expect(useRailStore.getState().panelOpacity).toBeCloseTo(0.6);
+  });
+
+  it("shows the current opacity as a percentage", () => {
+    useRailStore.setState({ panelOpacity: 0.75 });
+    render(<RailSettingsPane />);
+    expect(screen.getByText("75%")).toBeInTheDocument();
   });
 });

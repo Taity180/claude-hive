@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { useRailStore, RAIL_STORAGE_KEY } from "./railStore";
+import { clampOpacity, useRailStore, withOpacity, RAIL_STORAGE_KEY, MIN_OPACITY } from "./railStore";
 
 describe("railStore", () => {
   beforeEach(() => {
@@ -83,5 +83,41 @@ describe("railStore", () => {
     expect(useRailStore.getState().currentSize()).not.toEqual([900, 800]);
     useRailStore.getState().setCombined(false);
     expect(useRailStore.getState().currentSize()).not.toEqual([300, 500]);
+  });
+
+  it("starts fully opaque, so the setting changes nothing until asked", () => {
+    const s = useRailStore.getState();
+    expect(s.panelOpacity).toBe(1);
+    expect(s.sidebarOpacity).toBe(1);
+  });
+
+  it("keeps the two opacities independent", () => {
+    useRailStore.getState().setPanelOpacity(0.5);
+    expect(useRailStore.getState().sidebarOpacity).toBe(1);
+    useRailStore.getState().setSidebarOpacity(0.8);
+    expect(useRailStore.getState().panelOpacity).toBe(0.5);
+  });
+
+  it("will not let the rail be made invisible", () => {
+    // A rail faded to nothing is one the user cannot find again — the same
+    // reason hide-when-idle dims rather than hides.
+    useRailStore.getState().setPanelOpacity(0);
+    expect(useRailStore.getState().panelOpacity).toBe(MIN_OPACITY);
+    useRailStore.getState().setPanelOpacity(5);
+    expect(useRailStore.getState().panelOpacity).toBe(1);
+  });
+
+  it("persists both opacities", () => {
+    useRailStore.getState().setPanelOpacity(0.6);
+    useRailStore.getState().setSidebarOpacity(0.9);
+    const saved = JSON.parse(localStorage.getItem(RAIL_STORAGE_KEY) ?? "{}");
+    expect(saved.panelOpacity).toBe(0.6);
+    expect(saved.sidebarOpacity).toBe(0.9);
+  });
+
+  it("clamps a nonsense opacity rather than producing a broken colour", () => {
+    expect(clampOpacity(Number.NaN)).toBe(1);
+    expect(withOpacity("red", 0.5)).toBe("color-mix(in srgb, red 50%, transparent)");
+    expect(withOpacity("red", 2)).toBe("color-mix(in srgb, red 100%, transparent)");
   });
 });

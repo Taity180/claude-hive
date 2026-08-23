@@ -8,7 +8,7 @@ import { ExpandedDashboard } from "./ExpandedDashboard";
 import { SessionDetail } from "./SessionDetail";
 import { Settings } from "./Settings";
 import { ConnectedAppsBar } from "./ConnectedAppsBar";
-import { useRailStore } from "../stores/railStore";
+import { useRailStore, withOpacity } from "../stores/railStore";
 
 type PaneId = "sessions" | "activity" | "tasks" | "agents" | "settings";
 
@@ -98,6 +98,7 @@ function HivePane() {
  */
 export function RailPanes() {
   const combined = useRailStore((s) => s.combined);
+  const sidebarOpacity = useRailStore((s) => s.sidebarOpacity);
   // Hive's group is the only difference between the two modes. The sidebar
   // itself is the rail's layout either way — it was a row of tabs first, and a
   // sidebar reads better at every width the rail is ever given.
@@ -148,7 +149,14 @@ export function RailPanes() {
     <div className="flex h-full min-h-0">
       <div
         className="shrink-0 flex flex-col gap-0.5 p-2 overflow-y-auto"
-        style={{ width: 150, borderRight: "1px solid var(--hub-hair)" }}
+        style={{
+          width: 150,
+          borderRight: "1px solid var(--hub-hair)",
+          // Its own ground, so the sidebar can be more solid than the content
+          // beside it. Painted over a transparent root rather than blended with
+          // the panel, which would make one setting depend on the other.
+          background: withOpacity("var(--hub-bg-solid, #141414)", sidebarOpacity),
+        }}
       >
         {groups.map(({ group, items }) => (
           <div key={group} className="flex flex-col gap-0.5">

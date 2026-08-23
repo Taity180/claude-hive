@@ -37,6 +37,25 @@ export function isHorizontalAnchor(anchor: AnchorId): boolean {
 }
 
 /** A rail on a horizontal edge is wide; on a vertical edge it is tall. */
+/** Floor on opacity, so the rail cannot be made invisible and unfindable. */
+export const MIN_OPACITY = 0.3;
+
+export function clampOpacity(value: number): number {
+  if (!Number.isFinite(value)) return 1;
+  return Math.min(1, Math.max(MIN_OPACITY, value));
+}
+
+/**
+ * A CSS colour at the given alpha.
+ *
+ * `color-mix` rather than an rgba() built by hand: the ground is a theme token,
+ * so its channels are not known here.
+ */
+export function withOpacity(color: string, opacity: number): string {
+  const percent = Math.round(clampOpacity(opacity) * 100);
+  return `color-mix(in srgb, ${color} ${percent}%, transparent)`;
+}
+
 function defaultSize(anchor: AnchorId, combined: boolean): [number, number] {
   // Combined mode holds the whole of Hive behind the sidebar, so the plain
   // rail's width would open it as a sliver with the session list cut off.
@@ -96,6 +115,15 @@ interface Persisted {
    */
   pinnedMonitor: number | null;
   /**
+   * How opaque the rail's panel and sidebar are, 0-1.
+   *
+   * Two settings rather than one: the sidebar is a constant, so it can afford to
+   * be more solid than the content beside it, and a single slider could not
+   * express that.
+   */
+  panelOpacity: number;
+  sidebarOpacity: number;
+  /**
    * App slugs demoted out of the merged feed. Per app rather than per agent, so
    * a noisy Gmail can be quieted without silencing the agent reporting it.
    */
@@ -113,6 +141,8 @@ const DEFAULTS: Persisted = {
   hideWhenIdle: false,
   combined: false,
   pinnedMonitor: null,
+  panelOpacity: 1,
+  sidebarOpacity: 1,
   mutedApps: [],
 };
 
@@ -142,6 +172,8 @@ interface RailState extends Persisted {
   setHideWhenIdle: (hide: boolean) => void;
   setCombined: (combined: boolean) => void;
   setPinnedMonitor: (index: number | null) => void;
+  setPanelOpacity: (value: number) => void;
+  setSidebarOpacity: (value: number) => void;
   toggleAppMuted: (appId: string) => void;
   isAppMuted: (appId: string) => boolean;
   applyRemoteSettings: (patch: Partial<Persisted>) => void;
@@ -159,6 +191,8 @@ export const useRailStore = create<RailState>((set, get) => {
       hideWhenIdle,
       combined,
       pinnedMonitor,
+      panelOpacity,
+      sidebarOpacity,
       mutedApps,
     } = get();
     try {
@@ -174,6 +208,8 @@ export const useRailStore = create<RailState>((set, get) => {
           hideWhenIdle,
           combined,
           pinnedMonitor,
+          panelOpacity,
+          sidebarOpacity,
           mutedApps,
         })
       );
@@ -227,6 +263,18 @@ export const useRailStore = create<RailState>((set, get) => {
       set({ openOn });
       persist();
       broadcastRailSettings({ openOn });
+    },
+    setPanelOpacity: (value) => {
+      const panelOpacity = clampOpacity(value);
+      set({ panelOpacity });
+      persist();
+      broadcastRailSettings({ panelOpacity });
+    },
+    setSidebarOpacity: (value) => {
+      const sidebarOpacity = clampOpacity(value);
+      set({ sidebarOpacity });
+      persist();
+      broadcastRailSettings({ sidebarOpacity });
     },
     setPinnedMonitor: (pinnedMonitor) => {
       set({ pinnedMonitor });

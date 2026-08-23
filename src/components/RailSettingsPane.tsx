@@ -1,7 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useState } from "react";
 import { useHubStore } from "../stores/hubStore";
-import { sizeKey, useRailStore, type AnchorId } from "../stores/railStore";
+import { MIN_OPACITY, sizeKey, useRailStore, type AnchorId } from "../stores/railStore";
 import { AppIcon } from "./AppIcon";
 
 /** The 3×3 grid, reading order, with the inert centre as null. */
@@ -129,6 +129,43 @@ function Switch({
   );
 }
 
+/**
+ * A percentage slider.
+ *
+ * Native `<input type="range">` rather than a custom control: it is keyboard
+ * accessible for free and the rail has no other slider to be consistent with.
+ */
+function OpacitySlider({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  onChange: (value: number) => void;
+}) {
+  return (
+    <span className="shrink-0 flex items-center gap-1.5">
+      <input
+        type="range"
+        aria-label={label}
+        min={MIN_OPACITY * 100}
+        max={100}
+        step={5}
+        value={Math.round(value * 100)}
+        onChange={(e) => onChange(Number(e.target.value) / 100)}
+        style={{ width: 92, accentColor: "var(--hub-accent)", cursor: "pointer" }}
+      />
+      <span
+        className="tabular-nums text-[10.5px]"
+        style={{ color: "var(--hub-text-muted)", width: 30, textAlign: "right" }}
+      >
+        {Math.round(value * 100)}%
+      </span>
+    </span>
+  );
+}
+
 function Segmented<T extends string>({
   options,
   value,
@@ -197,6 +234,8 @@ export function RailSettingsPane() {
   const sizes = useRailStore((s) => s.sizes);
   const mutedApps = useRailStore((s) => s.mutedApps);
   const pinnedMonitor = useRailStore((s) => s.pinnedMonitor);
+  const panelOpacity = useRailStore((s) => s.panelOpacity);
+  const sidebarOpacity = useRailStore((s) => s.sidebarOpacity);
 
   const setAnchor = useRailStore((s) => s.setAnchor);
   const setOffset = useRailStore((s) => s.setOffset);
@@ -208,6 +247,8 @@ export function RailSettingsPane() {
   const forgetSizeForAnchor = useRailStore((s) => s.forgetSizeForAnchor);
   const toggleAppMuted = useRailStore((s) => s.toggleAppMuted);
   const setPinnedMonitor = useRailStore((s) => s.setPinnedMonitor);
+  const setPanelOpacity = useRailStore((s) => s.setPanelOpacity);
+  const setSidebarOpacity = useRailStore((s) => s.setSidebarOpacity);
 
   // Asked for once on mount. Hot-plugging a monitor mid-session is rare enough
   // that reopening the pane to see it is a fair trade for not polling the OS.
@@ -475,6 +516,35 @@ export function RailSettingsPane() {
               hint="One window with a sidebar. Hive's own window steps aside."
             />
             <Switch label="Bring Hive into the rail" on={combined} onChange={setCombined} />
+          </Row>
+        </RowGroup>
+      </section>
+
+      <section className="flex flex-col gap-1.5">
+        <SectionTitle>Appearance</SectionTitle>
+        <RowGroup>
+          <Row>
+            <Label
+              title="Window opacity"
+              hint="How much of the desktop shows through the rail."
+            />
+            <OpacitySlider
+              label="Window opacity"
+              value={panelOpacity}
+              onChange={setPanelOpacity}
+            />
+          </Row>
+
+          <Row>
+            <Label
+              title="Sidebar opacity"
+              hint="Set separately, so the sidebar can stay solid over a see-through panel."
+            />
+            <OpacitySlider
+              label="Sidebar opacity"
+              value={sidebarOpacity}
+              onChange={setSidebarOpacity}
+            />
           </Row>
         </RowGroup>
       </section>

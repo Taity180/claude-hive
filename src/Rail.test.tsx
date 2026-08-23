@@ -341,4 +341,21 @@ describe("Rail", () => {
       vi.useRealTimers();
     }
   });
+
+  it("paints each surface once, so the two opacities stay independent", () => {
+    // Painting the root as well would stack the panel's alpha under the
+    // sidebar's, making one setting depend on the other.
+    useRailStore.setState({ open: true, panelOpacity: 0.5, sidebarOpacity: 0.9 });
+    render(<Rail />);
+
+    const root = screen.getByTestId("rail-root");
+    expect(root.style.background).toBe("transparent");
+
+    const panel = root.firstElementChild as HTMLElement;
+    expect(panel.style.background).toContain("50%");
+
+    const sidebar = screen.getByRole("button", { name: /^All activity/ })
+      .parentElement!.parentElement as HTMLElement;
+    expect(sidebar.style.background).toContain("90%");
+  });
 });

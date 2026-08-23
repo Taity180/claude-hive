@@ -28,6 +28,8 @@ export interface RailSettingsPatch {
   hideWhenIdle?: boolean;
   combined?: boolean;
   pinnedMonitor?: number | null;
+  panelOpacity?: number;
+  sidebarOpacity?: number;
   mutedApps?: string[];
 }
 
