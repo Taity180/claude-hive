@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn().mockResolvedValue(null) }));
 vi.mock("@tauri-apps/api/event", () => ({
@@ -93,5 +93,55 @@ describe("Rail", () => {
     await waitFor(() => expect(invokeMock).toHaveBeenCalledWith("open_rail"));
     expect(useRailStore.getState().open).toBe(true);
     expect(invokeMock).not.toHaveBeenCalledWith("close_rail");
+  });
+
+  it("collapses a hover-opened rail when the pointer leaves", () => {
+    // Hover opened it and nothing closed it, so the first brush past the edge
+    // left the panel up for good.
+    vi.useFakeTimers();
+    try {
+      useRailStore.setState({ open: true, openOn: "hover" });
+      render(<Rail />);
+      fireEvent.mouseLeave(screen.getByTestId("rail-root"));
+      act(() => vi.advanceTimersByTime(600));
+      expect(useRailStore.getState().open).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("stays open when the pointer comes back before the grace period", () => {
+    vi.useFakeTimers();
+    try {
+      useRailStore.setState({ open: true, openOn: "hover" });
+      render(<Rail />);
+      const root = screen.getByTestId("rail-root");
+      fireEvent.mouseLeave(root);
+      act(() => vi.advanceTimersByTime(200));
+      fireEvent.mouseEnter(root);
+      act(() => vi.advanceTimersByTime(600));
+      expect(useRailStore.getState().open).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("leaves a click-to-open rail alone, and combined mode too", () => {
+    vi.useFakeTimers();
+    try {
+      useRailStore.setState({ open: true, openOn: "click" });
+      render(<Rail />);
+      fireEvent.mouseLeave(screen.getByTestId("rail-root"));
+      act(() => vi.advanceTimersByTime(600));
+      expect(useRailStore.getState().open).toBe(true);
+
+      // Combined mode is the whole window; leaving it must not collapse Hive.
+      useRailStore.setState({ open: true, openOn: "hover", combined: true });
+      fireEvent.mouseLeave(screen.getByTestId("rail-root"));
+      act(() => vi.advanceTimersByTime(600));
+      expect(useRailStore.getState().open).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

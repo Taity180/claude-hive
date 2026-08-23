@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { useTheme } from "./hooks/useTheme";
@@ -19,6 +19,14 @@ import { useUsage } from "./hooks/useUsage";
 import { useRailResize } from "./hooks/useRailResize";
 import { useRailSettingsSync } from "./hooks/useRailSettingsSync";
 
+/**
+ * Grace period before a hover-opened rail collapses again.
+ *
+ * Long enough to cross a gap between the panel and a control, short enough that
+ * the rail does not feel stuck open.
+ */
+const HOVER_CLOSE_MS = 500;
+
 export function Rail() {
   useTheme();
   useWebSocket();
@@ -35,6 +43,7 @@ export function Rail() {
   const offset = useRailStore((s) => s.offset);
   const restingForm = useRailStore((s) => s.restingForm);
   const followCursor = useRailStore((s) => s.followCursor);
+  const openOn = useRailStore((s) => s.openOn);
   const currentSize = useRailStore((s) => s.currentSize);
   const sizes = useRailStore((s) => s.sizes);
   const combined = useRailStore((s) => s.combined);
@@ -108,6 +117,44 @@ export function Rail() {
     return () => window.clearInterval(id);
   }, [onScreen, combined, followCursor, open, anchor, offset, restingForm]);
 
+  // Hover opens the rail; something has to close it again. Without this the
+  // panel stayed open forever after the first brush past the edge, which is
+  // worse than click-to-open — there was no way back to the nub but the
+  // collapse button.
+  const hoverCloses = openOn === "hover" && !combined;
+  const closeTimer = useRef<number | null>(null);
+
+  const cancelClose = useCallback(() => {
+    if (closeTimer.current !== null) {
+      window.clearTimeout(closeTimer.current);
+      closeTimer.current = null;
+    }
+  }, []);
+
+  const scheduleClose = useCallback(() => {
+    if (!hoverCloses) return;
+    cancelClose();
+    closeTimer.current = window.setTimeout(() => {
+      closeTimer.current = null;
+      // Typing counts as using it. The composer sits at the bottom edge, so the
+      // pointer is often outside the window while the reply is half-written.
+      const focused = document.activeElement;
+      if (
+        focused instanceof HTMLInputElement ||
+        focused instanceof HTMLTextAreaElement
+      ) {
+        return;
+      }
+      setOpen(false);
+    }, HOVER_CLOSE_MS);
+  }, [hoverCloses, cancelClose, setOpen]);
+
+  // A pending close must not fire after the setting changes or the rail closes.
+  useEffect(() => {
+    if (!hoverCloses) cancelClose();
+    return cancelClose;
+  }, [hoverCloses, cancelClose]);
+
   // The rail is a decorationless window, so the title bar has to move it. Same
   // handler Hive's own bar uses; buttons are excluded or dragging would eat the
   // clicks on the chips and the detach button.
@@ -127,6 +174,8 @@ export function Rail() {
       // not-yet-painted rail looked like while this feature was being debugged.
       style={{ background: "var(--hub-bg-solid, #141414)" }}
       data-testid="rail-root"
+      onMouseLeave={open ? scheduleClose : undefined}
+      onMouseEnter={cancelClose}
     >
       {open && combined ? (
         // Hive lives here now, so the sidebar layout replaces the tab strip —

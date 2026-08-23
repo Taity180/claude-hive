@@ -94,19 +94,55 @@ export function ConnectedAppsBar({ selected, onSelect }: ConnectedAppsBarProps) 
             }}
           >
             <AppIcon slug={app.id} label={app.label} />
-            <span
-              aria-hidden="true"
-              style={{
-                position: "absolute",
-                right: -2,
-                bottom: -2,
-                width: 7,
-                height: 7,
-                borderRadius: 999,
-                background: healthColor[app.health],
-                boxShadow: "0 0 0 1.5px var(--hub-bg-solid)",
-              }}
-            />
+            {isMuted ? (
+              // The badge is the one thing on the tile that reads at a glance,
+              // so a muted app says so there rather than only by being dimmer —
+              // and its health is not the point while it is muted.
+              <span
+                data-testid="app-muted-mark"
+                aria-hidden="true"
+                className="grid place-items-center"
+                style={{
+                  position: "absolute",
+                  right: -3,
+                  bottom: -3,
+                  width: 11,
+                  height: 11,
+                  borderRadius: 999,
+                  background: "#6b7280",
+                  boxShadow: "0 0 0 1.5px var(--hub-bg-solid)",
+                }}
+              >
+                <svg width="8" height="8" viewBox="0 0 24 24" aria-hidden="true">
+                  <path
+                    d="M11 5 6.5 9H3v6h3.5L11 19z"
+                    fill="#fff"
+                  />
+                  <path
+                    d="M15.5 9.5l5 5m0-5l-5 5"
+                    stroke="#fff"
+                    strokeWidth="2.2"
+                    strokeLinecap="round"
+                    fill="none"
+                  />
+                </svg>
+              </span>
+            ) : (
+              <span
+                data-testid="app-health"
+                aria-hidden="true"
+                style={{
+                  position: "absolute",
+                  right: -2,
+                  bottom: -2,
+                  width: 7,
+                  height: 7,
+                  borderRadius: 999,
+                  background: healthColor[app.health],
+                  boxShadow: "0 0 0 1.5px var(--hub-bg-solid)",
+                }}
+              />
+            )}
           </button>
         );
       })}

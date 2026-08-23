@@ -96,6 +96,19 @@ describe("ConnectedAppsBar", () => {
     expect(nodeFor("x")).not.toHaveAttribute("data-muted");
   });
 
+  it("swaps the health dot for a mute mark, since the badge is what reads", () => {
+    useRailStore.setState({ mutedApps: ["gmail"] });
+    render(<ConnectedAppsBar selected={null} onSelect={vi.fn()} />);
+
+    const muted = nodeFor("gmail");
+    expect(muted.querySelector('[data-testid="app-muted-mark"]')).not.toBeNull();
+    expect(muted.querySelector('[data-testid="app-health"]')).toBeNull();
+
+    const live = nodeFor("x");
+    expect(live.querySelector('[data-testid="app-health"]')).not.toBeNull();
+    expect(live.querySelector('[data-testid="app-muted-mark"]')).toBeNull();
+  });
+
   it("mutes an app from its context menu", () => {
     // Right-click is the way in: the bar is 25px tiles, with no room for a
     // per-tile menu button.
