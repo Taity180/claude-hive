@@ -11,6 +11,7 @@ export type AnchorId =
   | "br";
 
 export type RestingForm = "nub" | "sliver";
+export type OpenOn = "click" | "hover";
 
 /**
  * Versioned: the default edge offset changed from 8 to 14, and settings already
@@ -33,6 +34,17 @@ interface Persisted {
   restingForm: RestingForm;
   followCursor: boolean;
   sizes: Partial<Record<AnchorId, [number, number]>>;
+  /** Hover is faster; click avoids opening it by brushing past the edge. */
+  openOn: OpenOn;
+  /** Dim the rail while nothing needs the user. */
+  hideWhenIdle: boolean;
+  /** Panes live inside the Hive window instead of the rail's own. */
+  combined: boolean;
+  /**
+   * App slugs demoted out of the merged feed. Per app rather than per agent, so
+   * a noisy Gmail can be quieted without silencing the agent reporting it.
+   */
+  mutedApps: string[];
 }
 
 const DEFAULTS: Persisted = {
@@ -42,6 +54,10 @@ const DEFAULTS: Persisted = {
   restingForm: "nub",
   followCursor: true,
   sizes: {},
+  openOn: "click",
+  hideWhenIdle: false,
+  combined: false,
+  mutedApps: [],
 };
 
 function load(): Persisted {
@@ -64,16 +80,42 @@ interface RailState extends Persisted {
   setFollowCursor: (b: boolean) => void;
   setOpen: (b: boolean) => void;
   setSizeForAnchor: (a: AnchorId, size: [number, number]) => void;
+  forgetSizeForAnchor: (a: AnchorId) => void;
   currentSize: () => [number, number];
+  setOpenOn: (openOn: OpenOn) => void;
+  setHideWhenIdle: (hide: boolean) => void;
+  setCombined: (combined: boolean) => void;
+  toggleAppMuted: (appId: string) => void;
+  isAppMuted: (appId: string) => boolean;
 }
 
 export const useRailStore = create<RailState>((set, get) => {
   const persist = () => {
-    const { anchor, offset, restingForm, followCursor, sizes } = get();
+    const {
+      anchor,
+      offset,
+      restingForm,
+      followCursor,
+      sizes,
+      openOn,
+      hideWhenIdle,
+      combined,
+      mutedApps,
+    } = get();
     try {
       localStorage.setItem(
         RAIL_STORAGE_KEY,
-        JSON.stringify({ anchor, offset, restingForm, followCursor, sizes })
+        JSON.stringify({
+          anchor,
+          offset,
+          restingForm,
+          followCursor,
+          sizes,
+          openOn,
+          hideWhenIdle,
+          combined,
+          mutedApps,
+        })
       );
     } catch {
       // Private-mode or quota failures are not worth breaking the rail over.
@@ -104,6 +146,33 @@ export const useRailStore = create<RailState>((set, get) => {
       set({ sizes: { ...get().sizes, [a]: size } });
       persist();
     },
+    forgetSizeForAnchor: (a) => {
+      const { [a]: _dropped, ...rest } = get().sizes;
+      set({ sizes: rest });
+      persist();
+    },
+    setOpenOn: (openOn) => {
+      set({ openOn });
+      persist();
+    },
+    setHideWhenIdle: (hideWhenIdle) => {
+      set({ hideWhenIdle });
+      persist();
+    },
+    setCombined: (combined) => {
+      set({ combined });
+      persist();
+    },
+    toggleAppMuted: (appId) => {
+      const current = get().mutedApps;
+      set({
+        mutedApps: current.includes(appId)
+          ? current.filter((id) => id !== appId)
+          : [...current, appId],
+      });
+      persist();
+    },
+    isAppMuted: (appId) => get().mutedApps.includes(appId),
     currentSize: () => {
       const { anchor, sizes } = get();
       return sizes[anchor] ?? defaultSize(anchor);
