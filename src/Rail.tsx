@@ -61,6 +61,9 @@ export function Rail() {
       ? "left"
       : "right";
   const [onScreen, setOnScreen] = useState(false);
+  // Whether the pointer is over the rail. Combined mode follows the cursor only
+  // while it is not, so the window never moves under the hand using it.
+  const [pointerInside, setPointerInside] = useState(false);
   useEffect(() => {
     const stop = listen<boolean>("rail-visibility", (e) => setOnScreen(e.payload));
 
@@ -103,11 +106,17 @@ export function Rail() {
 
   // Cursor-follow. Polling is the only option — there is no cursor-crossed-
   // monitor event — but 250ms is well below the point where the movement reads
-  // as laggy, and it is skipped while the rail is open so the window never
-  // yanks out from under a click.
+  // as laggy.
+  //
+  // A resting nub follows freely. An open panel does not: the window would yank
+  // out from under a click. Combined mode is the exception — it is the only
+  // window there, so it has to come along, and "the pointer is not in it" is
+  // exactly the condition under which moving it is safe. Crossing to another
+  // monitor satisfies that by definition.
+  const canFollow = combined ? !pointerInside : !open;
   useEffect(() => {
-    if (!onScreen || combined || !followCursor || open) return;
-    const [width, height] = nubSize(anchor, restingForm);
+    if (!onScreen || !followCursor || !canFollow) return;
+    const [width, height] = open ? currentSize() : nubSize(anchor, restingForm);
     const id = window.setInterval(() => {
       invoke("place_rail", { anchor, width, height, offset }).catch(() => {
         // A transient failure during a display change should not kill the
@@ -115,7 +124,17 @@ export function Rail() {
       });
     }, 250);
     return () => window.clearInterval(id);
-  }, [onScreen, combined, followCursor, open, anchor, offset, restingForm]);
+  }, [
+    onScreen,
+    followCursor,
+    canFollow,
+    open,
+    anchor,
+    offset,
+    restingForm,
+    sizes,
+    currentSize,
+  ]);
 
   // Hover opens the rail; something has to close it again. Without this the
   // panel stayed open forever after the first brush past the edge, which is
@@ -158,7 +177,12 @@ export function Rail() {
   // The rail is a decorationless window, so the title bar has to move it. Same
   // handler Hive's own bar uses; buttons are excluded or dragging would eat the
   // clicks on the chips and the detach button.
+  //
+  // Only while the rail is not following the cursor: the follow poll owns the
+  // position, so a drag would snap back within 250ms — a broken affordance is
+  // worse than none.
   const startDrag = (e: React.MouseEvent) => {
+    if (followCursor) return;
     if (e.button !== 0) return;
     if ((e.target as HTMLElement).closest("button")) return;
     invoke("start_dragging").catch((err) => {
@@ -174,8 +198,14 @@ export function Rail() {
       // not-yet-painted rail looked like while this feature was being debugged.
       style={{ background: "var(--hub-bg-solid, #141414)" }}
       data-testid="rail-root"
-      onMouseLeave={open ? scheduleClose : undefined}
-      onMouseEnter={cancelClose}
+      onMouseLeave={() => {
+        setPointerInside(false);
+        if (open) scheduleClose();
+      }}
+      onMouseEnter={() => {
+        setPointerInside(true);
+        cancelClose();
+      }}
     >
       {open && combined ? (
         // Hive lives here now, so the sidebar layout replaces the tab strip —

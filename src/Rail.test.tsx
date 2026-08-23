@@ -12,6 +12,13 @@ vi.mock("./hooks/useTheme", () => ({
 }));
 vi.mock("./hooks/useAgentData", () => ({ useAgentData: () => {} }));
 vi.mock("./hooks/useRailResize", () => ({ useRailResize: () => {} }));
+// The rail only polls once Rust says the window is on screen.
+vi.mock("@tauri-apps/api/window", () => ({
+  getCurrentWindow: () => ({
+    isVisible: () => Promise.resolve(true),
+    onResized: () => Promise.resolve(() => {}),
+  }),
+}));
 vi.mock("../agentApi", () => ({}));
 vi.mock("./agentApi", () => ({
   createTask: vi.fn().mockResolvedValue(true),
@@ -140,6 +147,55 @@ describe("Rail", () => {
       fireEvent.mouseLeave(screen.getByTestId("rail-root"));
       act(() => vi.advanceTimersByTime(600));
       expect(useRailStore.getState().open).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("follows the cursor in combined mode, and stops while the pointer is on it", async () => {
+    // Combined mode is always open, and the follow poll used to be gated on
+    // `!open` (plus an explicit `!combined`), so it never followed at all.
+    vi.useFakeTimers();
+    try {
+      useRailStore.setState({ open: true, combined: true, followCursor: true });
+      render(<Rail />);
+      // onScreen is resolved from a promise; let it land before counting polls.
+      await act(async () => {
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      invokeMock.mockClear();
+      act(() => vi.advanceTimersByTime(600));
+      const polled = invokeMock.mock.calls.filter((c) => c[0] === "place_rail");
+      expect(polled.length).toBeGreaterThan(0);
+
+      // Pointer on the window: moving it now would move it out from under the
+      // hand using it.
+      act(() => {
+        fireEvent.mouseEnter(screen.getByTestId("rail-root"));
+      });
+      invokeMock.mockClear();
+      act(() => vi.advanceTimersByTime(600));
+      expect(invokeMock.mock.calls.filter((c) => c[0] === "place_rail")).toHaveLength(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not follow while a plain rail panel is open", async () => {
+    vi.useFakeTimers();
+    try {
+      useRailStore.setState({ open: true, combined: false, followCursor: true });
+      render(<Rail />);
+      await act(async () => {
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      invokeMock.mockClear();
+      act(() => vi.advanceTimersByTime(600));
+      expect(invokeMock.mock.calls.filter((c) => c[0] === "place_rail")).toHaveLength(0);
     } finally {
       vi.useRealTimers();
     }
