@@ -1,11 +1,11 @@
-import { invoke } from "@tauri-apps/api/core";
+import { openRail } from "../rail/openRail";
 
 export function RailButton() {
   return (
     <button
       type="button"
       onClick={() => {
-        void invoke("open_rail").catch((err) => {
+        void openRail().catch((err) => {
           console.error("[hive] open_rail failed:", err);
         });
       }}

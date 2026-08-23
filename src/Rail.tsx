@@ -14,6 +14,7 @@ import { useAgentData } from "./hooks/useAgentData";
 import { useUsage } from "./hooks/useUsage";
 import { useRailResize } from "./hooks/useRailResize";
 import { useRailSettingsSync } from "./hooks/useRailSettingsSync";
+import { openRail } from "./rail/openRail";
 
 /**
  * Grace period before a hover-opened rail collapses again.
@@ -112,7 +113,7 @@ export function Rail() {
   // window: it has to be showing and open, not stepping aside.
   useEffect(() => {
     if (!combined) return;
-    invoke("open_rail").catch((err) => {
+    openRail().catch((err) => {
       console.error("[hive] open_rail failed:", err);
     });
     setOpen(true);

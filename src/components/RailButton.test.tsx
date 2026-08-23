@@ -16,7 +16,12 @@ describe("RailButton", () => {
     invoke.mockResolvedValue(undefined);
     render(<RailButton />);
     await userEvent.click(screen.getByRole("button", { name: /rail/i }));
-    expect(invoke).toHaveBeenCalledWith("open_rail");
+    // With the geometry, so Rust can place it before it appears rather than
+    // letting it flash at its old rect.
+    expect(invoke).toHaveBeenCalledWith(
+      "open_rail",
+      expect.objectContaining({ anchor: expect.any(String), width: expect.any(Number) })
+    );
   });
 
   it("logs rather than throwing when the window will not open", async () => {

@@ -483,3 +483,20 @@ only blurs what is inside the page, so the blur has to come from the compositor.
 acrylic needs Windows 10 1803 or later, and a machine that refuses it gets a
 plain translucent rail rather than no rail, which the diagnostic log records
 either way.
+
+### Showing without a flash
+
+Two separate flashes, both from placing a window after it was already visible.
+
+`open_rail` used to just show the window and leave the frontend to place it. The
+window appeared wherever it was last left — the wrong monitor, or the nub's old
+rect — and only then jumped. The rail cannot fix this from its own side: it does
+not know it is visible until the `rail-visibility` event, which arrives after it
+already is. So `open_rail` takes the geometry and places while still hidden, and
+both callers pass it from the shared settings (`openRail`).
+
+The second is inside `position_rail`: Tauri has no atomic move-and-resize for a
+window, so there is always one frame between `set_position` and `set_size`. Which
+order hides that frame depends on the direction — opening out from the nub, move
+first and the frame is inside the final rect; collapsing back, resize first. The
+wrong order leaves the window briefly hanging off the screen edge.

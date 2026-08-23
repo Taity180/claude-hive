@@ -121,12 +121,45 @@ fn show(rail: &tauri::WebviewWindow) -> Result<(), String> {
     Ok(())
 }
 
+/// Show the rail, placed before it appears.
+///
+/// The geometry is optional but should always be passed. Showing first and
+/// letting the frontend place it afterwards is a visible flash: the window
+/// appears wherever it was last left — the wrong monitor, or the nub's old
+/// rect — and only then jumps to where it belongs. The frontend cannot avoid
+/// that on its own, because it does not know the window is visible until the
+/// event that arrives after the fact.
 #[tauri::command]
-pub fn open_rail(app: AppHandle) -> Result<(), String> {
+pub fn open_rail(
+    app: AppHandle,
+    anchor: Option<String>,
+    width: Option<u32>,
+    height: Option<u32>,
+    offset: Option<i32>,
+    monitor: Option<usize>,
+) -> Result<(), String> {
     let Some(rail) = app.get_webview_window(RAIL_LABEL) else {
         diag("open_rail: rail window missing — create_hidden did not run");
         return Err("rail window was not created at startup".into());
     };
+
+    if let (Some(anchor), Some(width), Some(height), Some(offset)) =
+        (anchor.as_deref(), width, height, offset)
+    {
+        match Anchor::from_str_id(anchor) {
+            // Placed while still hidden, so there is nothing to see move.
+            Some(anchor) => {
+                if let Err(e) =
+                    position_rail(&app, &rail, anchor, (width, height), offset, monitor)
+                {
+                    // Showing it in the wrong place beats not showing it.
+                    diag(&format!("open_rail: placement failed ({e}), showing anyway"));
+                }
+            }
+            None => diag(&format!("open_rail: unknown anchor {anchor}, showing as-is")),
+        }
+    }
+
     show(&rail)
 }
 
@@ -187,13 +220,30 @@ fn position_rail(
 
     let (x, y) = anchored_position(monitors[index], anchor, size, offset);
 
-    rail.set_size(tauri::Size::Physical(tauri::PhysicalSize {
+    let position = tauri::Position::Physical(tauri::PhysicalPosition { x, y });
+    let new_size = tauri::Size::Physical(tauri::PhysicalSize {
         width: size.0,
         height: size.1,
-    }))
-    .map_err(|e| e.to_string())?;
-    rail.set_position(tauri::Position::Physical(tauri::PhysicalPosition { x, y }))
-        .map_err(|e| e.to_string())
+    });
+
+    // Tauri has no atomic move-and-resize for a window, so there is always one
+    // frame in between the two calls. Which order puts that frame somewhere
+    // harmless depends on the direction: opening out from the nub, moving first
+    // keeps it inside the final rect; collapsing back, resizing first does. The
+    // wrong order leaves the window briefly hanging off the screen edge, which
+    // is the flash it used to show on every open.
+    let growing = rail
+        .outer_size()
+        .map(|current| size.0 > current.width || size.1 > current.height)
+        .unwrap_or(false);
+
+    if growing {
+        rail.set_position(position).map_err(|e| e.to_string())?;
+        rail.set_size(new_size).map_err(|e| e.to_string())
+    } else {
+        rail.set_size(new_size).map_err(|e| e.to_string())?;
+        rail.set_position(position).map_err(|e| e.to_string())
+    }
 }
 
 #[cfg(test)]

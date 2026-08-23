@@ -117,7 +117,9 @@ describe("Rail", () => {
   it("shows and opens itself when combined mode turns on", async () => {
     render(<Rail />);
     act(() => useRailStore.getState().setCombined(true));
-    await waitFor(() => expect(invokeMock).toHaveBeenCalledWith("open_rail"));
+    await waitFor(() =>
+      expect(invokeMock).toHaveBeenCalledWith("open_rail", expect.any(Object))
+    );
     expect(useRailStore.getState().open).toBe(true);
     expect(invokeMock).not.toHaveBeenCalledWith("close_rail");
   });
