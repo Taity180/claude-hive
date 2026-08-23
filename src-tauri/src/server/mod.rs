@@ -98,6 +98,8 @@ pub fn create_router(state: AppState, static_dir: Option<std::path::PathBuf>) ->
         .route("/api/agents/{agent_id}/reply", post(reply_to_agent))
         .route("/api/agents/{agent_id}/enabled", put(set_agent_enabled))
         .route("/api/agents/{agent_id}/pending", get(agent_pending_replies))
+        .route("/api/agents/questions", get(agent_questions))
+        .route("/api/agents/questions/{question_id}/answer", post(answer_agent_question))
         .route("/api/tasks", get(list_tasks))
         .route("/api/tasks", post(create_task))
         .route("/api/tasks/{id}/done", put(set_task_done))

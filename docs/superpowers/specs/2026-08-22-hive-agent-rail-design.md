@@ -183,7 +183,8 @@ from a Claude Code hook. Nothing below changes `hub_*`.
 | `agent_apps_sync` | agent → hive | Declare the full connected-app list with labels and health. Authoritative — replaces rather than merges, so a disconnected app leaves the bar. |
 | `agent_post` | agent → hive | Post to the feed, attributed to one app. The workhorse. |
 | `agent_inbox` | hive → agent | Drain queued user replies. Poll-based. |
-| `agent_ask` | agent → hive | Ask the user a question with clickable options and block on the answer, as `hub_ask` does for sessions. |
+| `agent_ask` | agent → hive | Ask the user a question with clickable options and wait for the answer, as `hub_ask` does for sessions. Waits up to `wait_seconds` (default 30, capped at 60) rather than indefinitely. |
+| `agent_ask_result` | hive → agent | Collect the answer to a question the agent did not wait out. |
 | `tasks_upsert` | agent → hive | Push tasks with a stable `external_id`, source app, optional due date. Idempotent. |
 | `tasks_list` | hive → agent | Read tasks with state and notes. |
 | `tasks_complete` | agent → hive | Tick a task off. Always recorded with the agent's name. |
@@ -363,8 +364,10 @@ seeded data would find.
 
 None blocking. Two worth revisiting once phase 3 is real:
 
-- Whether `agent_ask` should share the existing question store or get its own — depends on how the pending-question
-  UI generalises past sessions.
+- ~~Whether `agent_ask` should share the existing question store or get its own~~ — **its own**
+  (`AgentQuestionStore`). The session store is keyed by session id and its pending questions feed the session
+  UI, which would go looking for a session that an agent id does not name. Same shape, separate keyspace, and
+  the same one-pending-question-per-asker rule.
 - Whether feed history should persist alongside tasks. Currently no; revisit if the Rail proves useful as a log
   rather than a glance.
 
@@ -394,3 +397,20 @@ Placement is no longer keyed on `sizes`; forgetting a size re-places explicitly,
 because that is the only case that needs it. `setSizeForAnchor` ignores an
 unchanged value so an echo cannot wake anything either.
 
+### Agent questions
+
+`agent_ask` blocks the agent, so the question outranks everything else in the feed — above even a session
+waiting on the user, because something else's work is stopped until the click lands. It is never muted and
+never filtered out of an app view for the same reason: hiding it would strand the agent.
+
+The wait is bounded. An MCP call that hangs indefinitely is worse for the agent than being told to collect
+the answer later, so `agent_ask` waits `wait_seconds` (default 30, capped at 60) and then hands back a
+question id for `agent_ask_result`.
+
+Questions are **not** persisted, unlike tasks and declared apps. A question is a live conversation: an agent
+that has been restarted is no longer waiting, so restoring one would present the user with a choice that can
+no longer reach anybody.
+
+Answering is keyed on the question id, not the agent: by the time a click lands the agent may have asked
+something else, and answering whatever is current would attribute the choice to the wrong question. First
+answer wins, so two windows showing the same question cannot double-answer it.

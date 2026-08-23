@@ -3,7 +3,8 @@ use tokio::sync::{broadcast, RwLock};
 
 use crate::models::WsEvent;
 use crate::state::{
-    AgentFeed, AgentRegistry, AgentTokens, MessageStore, PlanUsageClient, QuestionStore,
+    AgentFeed, AgentQuestionStore, AgentRegistry, AgentTokens, MessageStore, PlanUsageClient,
+    QuestionStore,
     SessionRegistry, TaskStore, UsageScanner,
 };
 
@@ -16,6 +17,7 @@ pub struct AppState {
     pub plan_usage: PlanUsageClient,
     pub agents: AgentRegistry,
     pub agent_feed: AgentFeed,
+    pub agent_questions: AgentQuestionStore,
     pub tasks: TaskStore,
     /// Behind a lock because issuing a token mutates and then persists it.
     pub agent_tokens: Arc<RwLock<AgentTokens>>,
@@ -47,6 +49,7 @@ impl AppState {
             plan_usage: PlanUsageClient::new(),
             agents: AgentRegistry::load_or_create(dir),
             agent_feed: AgentFeed::new(),
+            agent_questions: AgentQuestionStore::new(),
             tasks: TaskStore::load_or_create(dir),
             agent_tokens: Arc::new(RwLock::new(tokens)),
             event_tx,

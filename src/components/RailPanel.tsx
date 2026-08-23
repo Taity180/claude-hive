@@ -3,6 +3,7 @@ import { useHubStore } from "../stores/hubStore";
 import { useRailStore } from "../stores/railStore";
 import { buildFeed } from "../feed/buildFeed";
 import { AgentPostRow } from "./AgentPostRow";
+import { AgentQuestionRow } from "./AgentQuestionRow";
 import { ConnectedAppsBar } from "./ConnectedAppsBar";
 import { InlineRename } from "./InlineRename";
 import { RailComposer } from "./RailComposer";
@@ -111,6 +112,7 @@ export function RailPanel({ embedded, selectedApp: controlled, onSelectApp }: Ra
   const sessions = useHubStore((s) => s.sessions);
   const agentPosts = useHubStore((s) => s.agentPosts);
   const agents = useHubStore((s) => s.agents);
+  const agentQuestions = useHubStore((s) => s.agentQuestions);
   const mutedApps = useRailStore((s) => s.mutedApps);
   const [ownSelectedApp, setOwnSelectedApp] = useState<string | null>(null);
   const selectedApp = onSelectApp ? (controlled ?? null) : ownSelectedApp;
@@ -121,6 +123,7 @@ export function RailPanel({ embedded, selectedApp: controlled, onSelectApp }: Ra
     pinAttention: true,
     appId: selectedApp,
     mutedApps,
+    questions: agentQuestions,
   });
 
   return (
@@ -154,6 +157,8 @@ export function RailPanel({ embedded, selectedApp: controlled, onSelectApp }: Ra
         {rows.map((row) =>
           row.kind === "session" ? (
             <SessionRow key={row.session.id} session={row.session} />
+          ) : row.kind === "question" ? (
+            <AgentQuestionRow key={row.question.id} question={row.question} />
           ) : (
             <AgentPostRow key={row.post.id} post={row.post} />
           )

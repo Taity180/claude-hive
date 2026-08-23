@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { useHubStore } from "./hubStore";
-import type { Agent, AgentPost } from "../types";
+import type { Agent, AgentPost, AgentQuestion } from "../types";
 
 function post(id: string, content: string, appId: string | null = null): AgentPost {
   return {
@@ -12,6 +12,21 @@ function post(id: string, content: string, appId: string | null = null): AgentPo
     postType: "info",
     timestamp: new Date().toISOString(),
     read: false,
+  };
+}
+
+function question(id: string, overrides: Partial<AgentQuestion> = {}): AgentQuestion {
+  return {
+    id,
+    agentId: "a1",
+    agentName: "Grok",
+    appId: null,
+    question: "Now?",
+    options: ["Yes", "No"],
+    askedAt: new Date().toISOString(),
+    answer: null,
+    answeredAt: null,
+    ...overrides,
   };
 }
 
@@ -29,7 +44,7 @@ function agent(overrides: Partial<Agent> = {}): Agent {
 
 describe("hubStore agents", () => {
   beforeEach(() => {
-    useHubStore.setState({ agents: [], agentApps: [], agentPosts: [] });
+    useHubStore.setState({ agents: [], agentApps: [], agentPosts: [], agentQuestions: [] });
   });
 
   it("adds a connecting agent", () => {
@@ -113,5 +128,44 @@ describe("hubStore agents", () => {
       apps: [{ id: "x", label: "X", health: "ok" }],
     });
     expect(useHubStore.getState().agentApps[0].agentName).toBeTruthy();
+  });
+
+  it("shows a question an agent asked", () => {
+    useHubStore.getState().handleWsEvent({ type: "agentAsked", question: question("q1") });
+    expect(useHubStore.getState().agentQuestions).toHaveLength(1);
+  });
+
+  it("replaces an agent's previous question rather than stacking them", () => {
+    // One question per agent, as for sessions: a second means the agent moved
+    // on, and answering the first would answer something abandoned.
+    const store = useHubStore.getState();
+    store.handleWsEvent({ type: "agentAsked", question: question("q1") });
+    store.handleWsEvent({ type: "agentAsked", question: question("q2") });
+
+    const questions = useHubStore.getState().agentQuestions;
+    expect(questions).toHaveLength(1);
+    expect(questions[0].id).toBe("q2");
+  });
+
+  it("keeps questions from different agents side by side", () => {
+    const store = useHubStore.getState();
+    store.handleWsEvent({ type: "agentAsked", question: question("q1") });
+    store.handleWsEvent({
+      type: "agentAsked",
+      question: question("q2", { agentId: "a2", agentName: "Ops" }),
+    });
+    expect(useHubStore.getState().agentQuestions).toHaveLength(2);
+  });
+
+  it("drops a question answered in the other window", () => {
+    // Both windows render the same question; a click in one must not leave dead
+    // buttons in the other.
+    const store = useHubStore.getState();
+    store.handleWsEvent({ type: "agentAsked", question: question("q1") });
+    store.handleWsEvent({
+      type: "agentQuestionAnswered",
+      question: question("q1", { answer: "Yes", answeredAt: new Date().toISOString() }),
+    });
+    expect(useHubStore.getState().agentQuestions).toHaveLength(0);
   });
 });

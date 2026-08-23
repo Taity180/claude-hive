@@ -1,4 +1,5 @@
 pub mod agent_feed;
+pub mod agent_questions;
 pub mod agent_registry;
 pub mod agent_tokens;
 pub mod session_registry;
@@ -9,6 +10,7 @@ pub mod usage_scanner;
 pub mod plan_usage_client;
 
 pub use agent_feed::AgentFeed;
+pub use agent_questions::{AgentAnswerError, AgentQuestionStore};
 pub use agent_registry::AgentRegistry;
 pub use agent_tokens::AgentTokens;
 pub use session_registry::SessionRegistry;

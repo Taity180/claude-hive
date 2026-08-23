@@ -1,5 +1,5 @@
 import { api } from "./api";
-import type { Agent, AgentAppRow, AgentPost, ConnectionInfo, Task } from "./types";
+import type { Agent, AgentAppRow, AgentPost, AgentQuestion, ConnectionInfo, Task } from "./types";
 
 /**
  * Read a JSON endpoint, falling back rather than throwing.
@@ -31,6 +31,36 @@ export function fetchAgentPosts(appId?: string, limit = 100): Promise<AgentPost[
   const params = new URLSearchParams({ limit: String(limit) });
   if (appId) params.set("appId", appId);
   return getJson<AgentPost[]>(`/api/agents/posts?${params}`, []);
+}
+
+export function fetchAgentQuestions(): Promise<AgentQuestion[]> {
+  return getJson<AgentQuestion[]>("/api/agents/questions", []);
+}
+
+/**
+ * Record the user's click on an agent's question.
+ *
+ * Keyed on the question rather than the agent: by the time a click lands the
+ * agent may have asked something else.
+ */
+export async function answerAgentQuestion(
+  questionId: string,
+  choice: string
+): Promise<boolean> {
+  try {
+    const response = await fetch(
+      `${api.baseUrl}/api/agents/questions/${questionId}/answer`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ choice }),
+      }
+    );
+    return response.ok;
+  } catch (err) {
+    console.error("[hive] answering an agent question failed:", err);
+    return false;
+  }
 }
 
 export function fetchConnectionInfo(): Promise<ConnectionInfo | null> {

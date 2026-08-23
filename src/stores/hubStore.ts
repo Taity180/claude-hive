@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { Agent, AgentAppRow, AgentPost, Task, Session, Message, PlanUsageSnapshot, Question, UsageSnapshot, ViewState, WsEvent } from "../types";
+import type { Agent, AgentAppRow, AgentPost, AgentQuestion, Task, Session, Message, PlanUsageSnapshot, Question, UsageSnapshot, ViewState, WsEvent } from "../types";
 
 // Minimum sensible height for the expanded dashboard. Guards against a bad
 // value being persisted (e.g. someone resized the window to almost nothing
@@ -38,6 +38,8 @@ interface HubState {
   agentApps: AgentAppRow[];
   /** Newest first. */
   agentPosts: AgentPost[];
+  /** Unanswered questions agents are waiting on. */
+  agentQuestions: AgentQuestion[];
   /** Tasks, persisted server-side; agents push them and the user ticks them. */
   tasks: Task[];
 
@@ -58,6 +60,7 @@ interface HubState {
   setAgents: (agents: Agent[]) => void;
   setAgentApps: (apps: AgentAppRow[]) => void;
   setAgentPosts: (posts: AgentPost[]) => void;
+  setAgentQuestions: (questions: AgentQuestion[]) => void;
   setTasks: (tasks: Task[]) => void;
 }
 
@@ -84,6 +87,7 @@ export const useHubStore = create<HubState>((set) => ({
   agents: [],
   agentApps: [],
   agentPosts: [],
+  agentQuestions: [],
   tasks: [],
   expandedHeight: DEFAULT_EXPANDED_HEIGHT,
 
@@ -151,6 +155,7 @@ export const useHubStore = create<HubState>((set) => ({
   setAgents: (agents) => set({ agents }),
   setAgentApps: (agentApps) => set({ agentApps }),
   setAgentPosts: (agentPosts) => set({ agentPosts }),
+  setAgentQuestions: (agentQuestions) => set({ agentQuestions }),
   setTasks: (tasks) => set({ tasks }),
 
   handleWsEvent: (event) =>
@@ -264,6 +269,23 @@ export const useHubStore = create<HubState>((set) => ({
             return {};
           }
           return { agentPosts: [event.post, ...state.agentPosts] };
+        }
+
+        case "agentAsked": {
+          // One question per agent: a new one means the agent moved on, so the
+          // old one must go rather than leaving the user two to answer.
+          const others = state.agentQuestions.filter(
+            (q) => q.agentId !== event.question.agentId
+          );
+          return { agentQuestions: [...others, event.question] };
+        }
+
+        case "agentQuestionAnswered": {
+          // Answered elsewhere — the other window, or another viewer of the same
+          // rail. Drop it rather than leaving dead buttons on screen.
+          return {
+            agentQuestions: state.agentQuestions.filter((q) => q.id !== event.question.id),
+          };
         }
 
         case "agentAppsChanged": {

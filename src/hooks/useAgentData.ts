@@ -1,5 +1,11 @@
 import { useEffect } from "react";
-import { fetchAgentApps, fetchAgentPosts, fetchAgents, fetchTasks } from "../agentApi";
+import {
+  fetchAgentApps,
+  fetchAgentPosts,
+  fetchAgentQuestions,
+  fetchAgents,
+  fetchTasks,
+} from "../agentApi";
 import { useHubStore } from "../stores/hubStore";
 
 /**
@@ -14,20 +20,23 @@ export function useAgentData() {
   const setAgents = useHubStore((s) => s.setAgents);
   const setAgentApps = useHubStore((s) => s.setAgentApps);
   const setAgentPosts = useHubStore((s) => s.setAgentPosts);
+  const setAgentQuestions = useHubStore((s) => s.setAgentQuestions);
   const setTasks = useHubStore((s) => s.setTasks);
 
   useEffect(() => {
     void (async () => {
-      const [agents, apps, posts, tasks] = await Promise.all([
+      const [agents, apps, posts, questions, tasks] = await Promise.all([
         fetchAgents(),
         fetchAgentApps(),
         fetchAgentPosts(),
+        fetchAgentQuestions(),
         fetchTasks(),
       ]);
       setAgents(agents);
       setAgentApps(apps);
       setAgentPosts(posts);
+      setAgentQuestions(questions);
       setTasks(tasks);
     })();
-  }, [setAgents, setAgentApps, setAgentPosts, setTasks]);
+  }, [setAgents, setAgentApps, setAgentPosts, setAgentQuestions, setTasks]);
 }

@@ -8,7 +8,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::mcp::agent_dispatch::dispatch;
 use crate::mcp::agent_tools::SERVER_INSTRUCTIONS;
-use crate::models::{Agent, AgentApp, AgentPost};
+use crate::models::{Agent, AgentApp, AgentPost, WsEvent};
+use crate::state::AgentAnswerError;
 use crate::server::app_state::AppState;
 
 /// Extract a bearer token, tolerating case in the scheme as RFC 7235 requires.
@@ -143,6 +144,53 @@ pub async fn reply_to_agent(
         .enqueue_reply(&agent_id, request.message)
         .await;
     StatusCode::ACCEPTED
+}
+
+/// Every unanswered agent question, for a rail that has just opened.
+pub async fn agent_questions(State(state): State<AppState>) -> impl IntoResponse {
+    Json(state.agent_questions.all_pending().await)
+}
+
+#[derive(Debug, Deserialize)]
+pub struct AnswerAgentRequest {
+    pub choice: String,
+}
+
+/// Record the user's click on an agent's question.
+///
+/// The question id rather than the agent: by the time a click lands the agent
+/// may have asked something else, and answering whatever is current would
+/// attribute the choice to the wrong question.
+pub async fn answer_agent_question(
+    State(state): State<AppState>,
+    Path(question_id): Path<String>,
+    Json(request): Json<AnswerAgentRequest>,
+) -> Response {
+    match state
+        .agent_questions
+        .answer(&question_id, request.choice.trim())
+        .await
+    {
+        Ok(question) => {
+            let _ = state.event_tx.send(WsEvent::AgentQuestionAnswered {
+                question: question.clone(),
+            });
+            (StatusCode::OK, Json(question)).into_response()
+        }
+        Err(AgentAnswerError::Unknown) => (
+            StatusCode::NOT_FOUND,
+            "no such question — the agent may have replaced it",
+        )
+            .into_response(),
+        Err(AgentAnswerError::AlreadyAnswered) => {
+            (StatusCode::CONFLICT, "already answered").into_response()
+        }
+        Err(AgentAnswerError::NotAnOption(choice)) => (
+            StatusCode::BAD_REQUEST,
+            format!("'{choice}' is not one of the offered options"),
+        )
+            .into_response(),
+    }
 }
 
 #[derive(Debug, Deserialize)]

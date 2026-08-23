@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { buildFeed } from "./buildFeed";
-import type { AgentPost, Session } from "../types";
+import { buildFeed, type FeedRow } from "./buildFeed";
+import type { AgentPost, AgentQuestion, Session } from "../types";
 
 const t = (minutes: number) => new Date(Date.UTC(2026, 7, 23, 12, minutes)).toISOString();
 
@@ -21,13 +21,35 @@ function post(id: string, at: string, appId: string | null = null): AgentPost {
   };
 }
 
+/** Whatever kind of row it is, the id that identifies it. */
+function rowId(row: FeedRow): string {
+  if (row.kind === "session") return row.session.id;
+  if (row.kind === "question") return row.question.id;
+  return row.post.id;
+}
+
+function question(id: string, at: string, options: Partial<AgentQuestion> = {}): AgentQuestion {
+  return {
+    id,
+    agentId: "a1",
+    agentName: "Grok",
+    appId: null,
+    question: "Now?",
+    options: ["Yes", "No"],
+    askedAt: at,
+    answer: null,
+    answeredAt: null,
+    ...options,
+  };
+}
+
 describe("buildFeed", () => {
   it("interleaves sessions and posts newest first", () => {
     const rows = buildFeed(
       [session("s-old", "running", t(0)), session("s-new", "running", t(30))],
       [post("p-mid", t(15))]
     );
-    expect(rows.map((r) => (r.kind === "session" ? r.session.id : r.post.id))).toEqual([
+    expect(rows.map(rowId)).toEqual([
       "s-new",
       "p-mid",
       "s-old",
@@ -143,5 +165,45 @@ describe("buildFeed", () => {
   it("keeps posts with no app when something is muted", () => {
     const rows = buildFeed([], [post("no-app", t(10), null)], { mutedApps: ["gmail"] });
     expect(rows).toHaveLength(1);
+  });
+
+  it("pins an unanswered agent question above everything, including a waiting session", () => {
+    // An agent is blocked until the click lands, so it outranks even a session
+    // waiting on the user.
+    const rows = buildFeed(
+      [session("s-waiting", "waiting_for_input", t(30))],
+      [post("p-new", t(45))],
+      { pinAttention: true, questions: [question("q1", t(1))] }
+    );
+    expect(rows.map(rowId)).toEqual(["q1", "s-waiting", "p-new"]);
+  });
+
+  it("leaves out a question that has been answered", () => {
+    const rows = buildFeed([], [], {
+      questions: [question("q1", t(1), { answer: "Yes", answeredAt: t(2) })],
+    });
+    expect(rows).toHaveLength(0);
+  });
+
+  it("keeps a question in its app's view, and out of another app's", () => {
+    const mine = question("q1", t(1), { appId: "gmail" });
+    const gmail = buildFeed([], [post("p1", t(2), "gmail")], {
+      appId: "gmail",
+      questions: [mine],
+    });
+    expect(gmail.map(rowId)).toEqual(["q1", "p1"]);
+
+    const slack = buildFeed([], [], { appId: "slack", questions: [mine] });
+    expect(slack).toHaveLength(0);
+  });
+
+  it("never mutes a question, even when its app is muted", () => {
+    // Muting is about a chatty app. An agent blocked on an answer is not chatter,
+    // and hiding it would strand the agent with no way to be unblocked.
+    const rows = buildFeed([], [post("p1", t(2), "gmail")], {
+      mutedApps: ["gmail"],
+      questions: [question("q1", t(1), { appId: "gmail" })],
+    });
+    expect(rows.map(rowId)).toEqual(["q1"]);
   });
 });

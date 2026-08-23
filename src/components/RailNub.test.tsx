@@ -284,4 +284,55 @@ describe("RailNub", () => {
     render(<RailNub onOpen={vi.fn()} />);
     expect(screen.getByTestId("rail-nub")).toHaveAttribute("data-orientation", "vertical");
   });
+
+  it("counts an unanswered agent question as unread", () => {
+    // An agent is blocked on it. A resting rail that showed nothing would hide
+    // the one thing with somebody waiting on the other end.
+    useHubStore.setState({
+      sessions: [],
+      unreadSessions: new Set(),
+      agentPosts: [],
+      tasks: [],
+      agentQuestions: [
+        {
+          id: "q1",
+          agentId: "a1",
+          agentName: "Grok",
+          appId: null,
+          question: "Now?",
+          options: ["Yes", "No"],
+          askedAt: "",
+          answer: null,
+          answeredAt: null,
+        },
+      ] as never,
+    });
+    render(<RailNub onOpen={vi.fn()} />);
+    expect(screen.getByTestId("unread-badge")).toHaveTextContent("1");
+  });
+
+  it("stays solid for a pending question with hide-when-idle on", () => {
+    useRailStore.setState({ hideWhenIdle: true });
+    useHubStore.setState({
+      sessions: [],
+      unreadSessions: new Set(),
+      agentPosts: [],
+      tasks: [],
+      agentQuestions: [
+        {
+          id: "q1",
+          agentId: "a1",
+          agentName: "Grok",
+          appId: null,
+          question: "Now?",
+          options: ["Yes", "No"],
+          askedAt: "",
+          answer: null,
+          answeredAt: null,
+        },
+      ] as never,
+    });
+    render(<RailNub onOpen={vi.fn()} />);
+    expect(screen.getByTestId("rail-nub")).not.toHaveAttribute("data-dimmed");
+  });
 });

@@ -153,6 +153,14 @@ fn normalise_arg_keys(args: Value) -> Value {
     Value::Object(out)
 }
 
+/// Longest an `agent_ask` call waits for the click before telling the agent to
+/// collect the answer later.
+const MAX_ASK_WAIT_SECONDS: u64 = 60;
+const DEFAULT_ASK_WAIT_SECONDS: u64 = 30;
+const ASK_POLL_MS: u64 = 250;
+/// More than a handful of buttons is a form, not a question.
+const MAX_ASK_OPTIONS: usize = 5;
+
 async fn handle_tools_call(
     state: &AppState,
     agent_id: &str,
@@ -246,6 +254,110 @@ async fn handle_tools_call(
                 id,
                 format!("{} reply/replies from the user:\n{body}", replies.len()),
             )
+        }
+
+        "agent_ask" => {
+            let Some(question) = args
+                .get("question")
+                .and_then(|q| q.as_str())
+                .map(str::trim)
+                .filter(|q| !q.is_empty())
+            else {
+                return tool_error(id, "agent_ask requires a non-empty `question`.");
+            };
+
+            let options: Vec<String> = args
+                .get("options")
+                .and_then(|o| o.as_array())
+                .map(|list| {
+                    list.iter()
+                        .filter_map(|o| o.as_str())
+                        .map(str::trim)
+                        .filter(|o| !o.is_empty())
+                        .map(String::from)
+                        .collect()
+                })
+                .unwrap_or_default();
+            if options.len() < 2 {
+                return tool_error(
+                    id,
+                    "agent_ask requires at least two `options` — the user answers by clicking one.",
+                );
+            }
+            if options.len() > MAX_ASK_OPTIONS {
+                return tool_error(
+                    id,
+                    format!("agent_ask accepts at most {MAX_ASK_OPTIONS} options."),
+                );
+            }
+
+            let app_id = args
+                .get("app_id")
+                .and_then(|v| v.as_str())
+                .map(String::from);
+            if let Some(ref app) = app_id {
+                state.agents.ensure_app(agent_id, app).await;
+            }
+
+            let asked = state
+                .agent_questions
+                .ask(agent_id, &agent.name, app_id, question.to_string(), options)
+                .await;
+            let _ = state.event_tx.send(WsEvent::AgentAsked {
+                question: asked.clone(),
+            });
+
+            // Wait for the click here rather than making the agent poll. Capped:
+            // an MCP call that hangs indefinitely is worse for the agent than
+            // being told to collect the answer later.
+            let wait = args
+                .get("wait_seconds")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(DEFAULT_ASK_WAIT_SECONDS)
+                .min(MAX_ASK_WAIT_SECONDS);
+
+            let deadline = wait * 1000 / ASK_POLL_MS;
+            for _ in 0..deadline {
+                tokio::time::sleep(std::time::Duration::from_millis(ASK_POLL_MS)).await;
+                match state.agent_questions.get(agent_id).await {
+                    // Replaced by another question from this agent: stop waiting
+                    // on one nobody can answer any more.
+                    Some(current) if current.id != asked.id => break,
+                    Some(current) => {
+                        if let Some(answer) = current.answer {
+                            return text_result(id, format!("The user chose: {answer}"));
+                        }
+                    }
+                    None => break,
+                }
+            }
+
+            text_result(
+                id,
+                format!(
+                    "Asked. Nobody has answered yet — call agent_ask_result with question_id \"{}\" to collect it.",
+                    asked.id
+                ),
+            )
+        }
+
+        "agent_ask_result" => {
+            let Some(question_id) = args.get("question_id").and_then(|v| v.as_str()) else {
+                return tool_error(id, "agent_ask_result requires `question_id`.");
+            };
+
+            match state.agent_questions.get(agent_id).await {
+                Some(q) if q.id == question_id => match q.answer {
+                    Some(answer) => text_result(id, format!("The user chose: {answer}")),
+                    None => text_result(id, "Still waiting on the user."),
+                },
+                // Only the agent's current question is kept, so anything else is
+                // one it has already replaced.
+                _ => tool_error(
+                    id,
+                    "That question is no longer outstanding — you replaced it with a later one.",
+                ),
+            }
         }
 
         "tasks_upsert" => {
@@ -854,5 +966,184 @@ mod tests {
         assert_eq!(to_snake_case("appId"), "app_id");
         assert_eq!(to_snake_case("sourceLabel"), "source_label");
         assert_eq!(to_snake_case("content"), "content");
+    }
+
+    #[tokio::test]
+    async fn agent_ask_records_the_question_and_returns_its_id() {
+        let (state, _dir) = test_state();
+        state.agents.upsert("a1", "Grok".into(), None).await;
+
+        let value = call(
+            &state,
+            "agent_ask",
+            json!({
+                "question": "Reply to Sarah now?",
+                "options": ["Yes", "Later"],
+                "app_id": "gmail",
+                "wait_seconds": 0
+            }),
+        )
+        .await;
+
+        let pending = state.agent_questions.all_pending().await;
+        assert_eq!(pending.len(), 1);
+        assert_eq!(pending[0].question, "Reply to Sarah now?");
+        assert_eq!(pending[0].app_id.as_deref(), Some("gmail"));
+        // The id has to come back, or the agent cannot collect the answer.
+        let text = value["result"]["content"][0]["text"].as_str().unwrap();
+        assert!(text.contains(&pending[0].id), "{text}");
+    }
+
+    #[tokio::test]
+    async fn agent_ask_declares_the_app_it_names() {
+        // Same safety net as agent_post: a question attributed to an app that is
+        // not in the bar cannot be filtered or muted.
+        let (state, _dir) = test_state();
+        state.agents.upsert("a1", "Grok".into(), None).await;
+        call(
+            &state,
+            "agent_ask",
+            json!({ "question": "Now?", "options": ["Yes", "No"], "app_id": "gmail", "wait_seconds": 0 }),
+        )
+        .await;
+        assert_eq!(state.agents.apps("a1").await.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn agent_ask_needs_a_question_and_two_options() {
+        let (state, _dir) = test_state();
+        state.agents.upsert("a1", "Grok".into(), None).await;
+
+        let no_question = call(&state, "agent_ask", json!({ "options": ["a", "b"] })).await;
+        assert_eq!(no_question["result"]["isError"], json!(true));
+
+        let one_option = call(
+            &state,
+            "agent_ask",
+            json!({ "question": "Now?", "options": ["Yes"] }),
+        )
+        .await;
+        assert_eq!(one_option["result"]["isError"], json!(true));
+
+        let too_many = call(
+            &state,
+            "agent_ask",
+            json!({ "question": "Now?", "options": ["1", "2", "3", "4", "5", "6"] }),
+        )
+        .await;
+        assert_eq!(too_many["result"]["isError"], json!(true));
+
+        assert!(state.agent_questions.all_pending().await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn agent_ask_returns_the_answer_when_it_lands_while_waiting() {
+        let (state, _dir) = test_state();
+        state.agents.upsert("a1", "Grok".into(), None).await;
+
+        // Answer from another task while the tool call is waiting, which is what
+        // a click in the rail does.
+        let clicker = {
+            let state = state.clone();
+            tokio::spawn(async move {
+                for _ in 0..40 {
+                    tokio::time::sleep(std::time::Duration::from_millis(25)).await;
+                    if let Some(q) = state.agent_questions.get("a1").await {
+                        let _ = state.agent_questions.answer(&q.id, "Later").await;
+                        return;
+                    }
+                }
+            })
+        };
+
+        let value = call(
+            &state,
+            "agent_ask",
+            json!({ "question": "Reply now?", "options": ["Yes", "Later"], "wait_seconds": 5 }),
+        )
+        .await;
+        clicker.await.unwrap();
+
+        let text = value["result"]["content"][0]["text"].as_str().unwrap();
+        assert!(text.contains("Later"), "{text}");
+    }
+
+    #[tokio::test]
+    async fn agent_ask_result_reports_pending_then_the_choice() {
+        let (state, _dir) = test_state();
+        state.agents.upsert("a1", "Grok".into(), None).await;
+        call(
+            &state,
+            "agent_ask",
+            json!({ "question": "Now?", "options": ["Yes", "No"], "wait_seconds": 0 }),
+        )
+        .await;
+        let question = state.agent_questions.get("a1").await.unwrap();
+
+        let waiting = call(
+            &state,
+            "agent_ask_result",
+            json!({ "question_id": question.id }),
+        )
+        .await;
+        assert!(waiting["result"]["content"][0]["text"]
+            .as_str()
+            .unwrap()
+            .contains("Still waiting"));
+
+        state.agent_questions.answer(&question.id, "Yes").await.unwrap();
+        let answered = call(
+            &state,
+            "agent_ask_result",
+            json!({ "question_id": question.id }),
+        )
+        .await;
+        assert!(answered["result"]["content"][0]["text"]
+            .as_str()
+            .unwrap()
+            .contains("Yes"));
+    }
+
+    #[tokio::test]
+    async fn agent_ask_result_on_a_replaced_question_is_an_error() {
+        let (state, _dir) = test_state();
+        state.agents.upsert("a1", "Grok".into(), None).await;
+        call(
+            &state,
+            "agent_ask",
+            json!({ "question": "First?", "options": ["Yes", "No"], "wait_seconds": 0 }),
+        )
+        .await;
+        let first = state.agent_questions.get("a1").await.unwrap();
+        call(
+            &state,
+            "agent_ask",
+            json!({ "question": "Second?", "options": ["Yes", "No"], "wait_seconds": 0 }),
+        )
+        .await;
+
+        let value = call(&state, "agent_ask_result", json!({ "question_id": first.id })).await;
+        assert_eq!(value["result"]["isError"], json!(true));
+    }
+
+    #[tokio::test]
+    async fn asking_announces_it_so_an_open_rail_shows_it_without_a_refetch() {
+        let (state, _dir) = test_state();
+        state.agents.upsert("a1", "Grok".into(), None).await;
+        let mut events = state.event_tx.subscribe();
+
+        call(
+            &state,
+            "agent_ask",
+            json!({ "question": "Now?", "options": ["Yes", "No"], "wait_seconds": 0 }),
+        )
+        .await;
+
+        match events.recv().await.expect("an event must be sent") {
+            crate::models::WsEvent::AgentAsked { question } => {
+                assert_eq!(question.question, "Now?")
+            }
+            other => panic!("expected AgentAsked, got {other:?}"),
+        }
     }
 }

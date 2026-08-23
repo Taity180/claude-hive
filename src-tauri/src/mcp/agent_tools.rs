@@ -109,6 +109,35 @@ pub const AGENT_TOOLS: &[ToolDef] = &[
         }"#,
     },
     ToolDef {
+        name: "agent_ask",
+        description: "Ask the user a question with clickable options and wait for their answer. Use it when you need a decision only they can make — better than guessing, and better than stopping to report that you are stuck. Waits up to wait_seconds; if nobody answers in that time, call agent_ask_result with the returned id to collect it later. Asking again replaces your previous question, so only ask what you are still waiting on.",
+        schema: r#"{
+            "type": "object",
+            "properties": {
+                "question": { "type": "string", "description": "One question, in a sentence. The user sees this in their feed." },
+                "options": {
+                    "type": "array",
+                    "description": "Two to five short choices. The user clicks one; free text is not an option.",
+                    "items": { "type": "string" }
+                },
+                "app_id": { "type": "string", "description": "Slug of the app it concerns, matching agent_apps_sync." },
+                "wait_seconds": { "type": "integer", "description": "How long to wait for the click before returning. 0 returns immediately. Capped at 60.", "default": 30 }
+            },
+            "required": ["question", "options"]
+        }"#,
+    },
+    ToolDef {
+        name: "agent_ask_result",
+        description: "Collect the answer to a question you asked earlier and did not wait out. Returns the choice, or says it is still pending.",
+        schema: r#"{
+            "type": "object",
+            "properties": {
+                "question_id": { "type": "string", "description": "The id agent_ask returned." }
+            },
+            "required": ["question_id"]
+        }"#,
+    },
+    ToolDef {
         name: "agent_inbox",
         description: "Collect replies the user typed back to you in Hive, and clear them. Call at the start of every run. This is the only way their replies reach you — Hive cannot push to you, so an uncollected reply waits indefinitely. Each reply is delivered once.",
         schema: r#"{

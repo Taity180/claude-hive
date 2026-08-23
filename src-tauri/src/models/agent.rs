@@ -60,6 +60,33 @@ pub struct AgentPost {
     pub read: bool,
 }
 
+/// A question an agent asked the user, with clickable options.
+///
+/// Deliberately not the session `Question` type, and not in the session store:
+/// the session UI renders a pending question against a live session, and an
+/// agent id there would have it looking for a session that does not exist. Same
+/// shape, separate keyspace.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentQuestion {
+    pub id: String,
+    pub agent_id: String,
+    /// Denormalised like `AgentPost`, so the row still renders if the agent goes.
+    pub agent_name: String,
+    pub app_id: Option<String>,
+    pub question: String,
+    pub options: Vec<String>,
+    pub asked_at: DateTime<Utc>,
+    pub answer: Option<String>,
+    pub answered_at: Option<DateTime<Utc>>,
+}
+
+impl AgentQuestion {
+    pub fn is_pending(&self) -> bool {
+        self.answer.is_none()
+    }
+}
+
 /// A reply the user typed, waiting for the agent to collect it.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -107,5 +134,42 @@ mod tests {
     fn an_app_with_no_health_reported_defaults_to_ok() {
         let app: AgentApp = serde_json::from_str(r#"{"id":"gmail","label":"Gmail"}"#).unwrap();
         assert_eq!(app.health, AppHealth::Ok);
+    }
+
+    #[test]
+    fn an_agent_question_serialises_camel_case() {
+        let q = AgentQuestion {
+            id: "q1".into(),
+            agent_id: "a1".into(),
+            agent_name: "Grok".into(),
+            app_id: Some("gmail".into()),
+            question: "Reply to Sarah now?".into(),
+            options: vec!["Yes".into(), "Later".into()],
+            asked_at: Utc::now(),
+            answer: None,
+            answered_at: None,
+        };
+        let json = serde_json::to_value(&q).unwrap();
+        assert!(json.get("agentId").is_some());
+        assert!(json.get("askedAt").is_some());
+        assert!(json.get("agent_id").is_none());
+    }
+
+    #[test]
+    fn an_answered_question_is_no_longer_pending() {
+        let mut q = AgentQuestion {
+            id: "q1".into(),
+            agent_id: "a1".into(),
+            agent_name: "Grok".into(),
+            app_id: None,
+            question: "Now?".into(),
+            options: vec!["Yes".into()],
+            asked_at: Utc::now(),
+            answer: None,
+            answered_at: None,
+        };
+        assert!(q.is_pending());
+        q.answer = Some("Yes".into());
+        assert!(!q.is_pending());
     }
 }

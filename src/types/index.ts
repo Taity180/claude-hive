@@ -152,6 +152,8 @@ export type WsEvent =
   | { type: "agentConnected"; agent: Agent }
   | { type: "agentAppsChanged"; agentId: string; apps: AgentApp[] }
   | { type: "agentPosted"; post: AgentPost }
+  | { type: "agentAsked"; question: AgentQuestion }
+  | { type: "agentQuestionAnswered"; question: AgentQuestion }
   | { type: "taskUpserted"; task: Task }
   | { type: "taskRemoved"; taskId: string };
 
@@ -199,6 +201,25 @@ export interface AgentPost {
   postType: MessageType;
   timestamp: string;
   read: boolean;
+}
+
+/**
+ * A question an agent asked the user, answered by clicking an option.
+ *
+ * Not the session `Question` type: that one is keyed to a live session, and the
+ * session UI would go looking for a session that does not exist.
+ */
+export interface AgentQuestion {
+  id: string;
+  agentId: string;
+  /** Denormalised, so the row survives its agent disconnecting. */
+  agentName: string;
+  appId: string | null;
+  question: string;
+  options: string[];
+  askedAt: string;
+  answer: string | null;
+  answeredAt: string | null;
 }
 
 export interface ConnectionInfo {

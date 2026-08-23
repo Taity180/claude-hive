@@ -27,6 +27,7 @@ export function RailNub({ onOpen }: { onOpen: () => void }) {
   const unread = useHubStore((s) => s.unreadSessions);
   const agentPosts = useHubStore((s) => s.agentPosts);
   const tasks = useHubStore((s) => s.tasks);
+  const agentQuestions = useHubStore((s) => s.agentQuestions);
   const restingForm = useRailStore((s) => s.restingForm);
   const anchor = useRailStore((s) => s.anchor);
   const openOn = useRailStore((s) => s.openOn);
@@ -39,7 +40,10 @@ export function RailNub({ onOpen }: { onOpen: () => void }) {
   // Unread counts both halves of the feed. Counting only sessions left the nub
   // completely blank while agents were posting, which reads as broken.
   const unreadPosts = agentPosts.filter((p) => !p.read).length;
-  const unreadCount = unread.size + unreadPosts;
+  // A question counts as unread until answered: an agent is blocked on it, so it
+  // is the last thing that should be invisible from a resting rail.
+  const pendingQuestions = agentQuestions.filter((q) => q.answer === null).length;
+  const unreadCount = unread.size + unreadPosts + pendingQuestions;
 
   const hasAgentActivity = agentPosts.length > 0;
   const openTasks = tasks.filter((t) => !t.done).length;
