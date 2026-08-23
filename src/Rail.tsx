@@ -79,15 +79,22 @@ export function Rail() {
     };
   }, []);
 
-  // Resize and reposition whenever the shape changes. `sizes` is in the deps
-  // so a per-anchor resize takes effect without waiting for another trigger.
+  // Resize and reposition whenever the shape changes.
+  //
+  // Deliberately not keyed on `sizes`. Every placement makes the OS emit a
+  // resize, which `useRailResize` records, which changes `sizes` — so having it
+  // here made placement re-trigger itself, and the rail hopped monitors as a
+  // side effect of its own resizing. A size the user dragged is already on
+  // screen; the only case that needs a fresh placement is forgetting a size,
+  // which the settings row does itself.
   useEffect(() => {
     if (!onScreen) return;
     const [width, height] = open ? currentSize() : nubSize(anchor, restingForm);
     invoke("place_rail", { anchor, width, height, offset }).catch((err) => {
       console.error("[hive] place_rail failed:", err);
     });
-  }, [onScreen, open, combined, anchor, offset, restingForm, sizes, currentSize]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onScreen, open, combined, anchor, offset, restingForm]);
 
   // Combined mode moves Hive *into the rail*, so the rail becomes the only
   // window: it has to be showing and open, not stepping aside.
@@ -103,12 +110,14 @@ export function Rail() {
   // monitor event — but 250ms is well below the point where the movement reads
   // as laggy.
   //
-  // A resting nub follows freely. An open panel does not: the window would yank
-  // out from under a click. Combined mode is the exception — it is the only
-  // window there, so it has to come along, and "the pointer is not in it" is
-  // exactly the condition under which moving it is safe. Crossing to another
-  // monitor satisfies that by definition.
-  const canFollow = combined ? !pointerInside : !open;
+  // One rule: the rail follows unless the pointer is on it. That is the whole
+  // of "never move out from under the hand using it", and crossing to another
+  // monitor satisfies it by definition.
+  //
+  // An open panel used to be excluded, and then followed anyway through the
+  // placement loop described above — behaviour worth having, arrived at by
+  // accident. This is that behaviour, on purpose.
+  const canFollow = !pointerInside;
   useEffect(() => {
     if (!onScreen || !followCursor || !canFollow) return;
     const [width, height] = open ? currentSize() : nubSize(anchor, restingForm);

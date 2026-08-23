@@ -195,7 +195,13 @@ export const useRailStore = create<RailState>((set, get) => {
     },
     setOpen: (open) => set({ open }),
     setSizeForAnchor: (a, size) => {
-      set({ sizes: { ...get().sizes, [sizeKey(a, get().combined)]: size } });
+      const key = sizeKey(a, get().combined);
+      const current = get().sizes[key];
+      // A placement makes the OS report the size back, so most calls here are
+      // an echo of what the rail just asked for. Writing an unchanged value
+      // would still hand out a new object and wake every listener.
+      if (current && current[0] === size[0] && current[1] === size[1]) return;
+      set({ sizes: { ...get().sizes, [key]: size } });
       persist();
     },
     forgetSizeForAnchor: (a) => {

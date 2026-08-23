@@ -1,3 +1,4 @@
+import { invoke } from "@tauri-apps/api/core";
 import { useHubStore } from "../stores/hubStore";
 import { sizeKey, useRailStore, type AnchorId } from "../stores/railStore";
 import { AppIcon } from "./AppIcon";
@@ -304,7 +305,16 @@ export function RailSettingsPane() {
           <button
             type="button"
             aria-label="Forget remembered size"
-            onClick={() => forgetSizeForAnchor(anchor)}
+            onClick={() => {
+              forgetSizeForAnchor(anchor);
+              // Placement is no longer keyed on the remembered sizes — it
+              // re-triggered itself through the resize the OS reports back — so
+              // the one case that does need a fresh placement asks for it.
+              const [width, height] = useRailStore.getState().currentSize();
+              void invoke("place_rail", { anchor, width, height, offset }).catch((err) => {
+                console.error("[hive] place_rail failed:", err);
+              });
+            }}
             className="shrink-0 text-[10.5px] rounded px-1.5 py-0.5"
             style={{
               background: "var(--hub-surface)",

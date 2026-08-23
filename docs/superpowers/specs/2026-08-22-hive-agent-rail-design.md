@@ -374,3 +374,23 @@ separate Zustand stores; `localStorage` is shared but read once at module load.
 The toggle was correct, persisted, and tested, and still did nothing visible,
 because the window that had to react never learned about it. `railSync.ts` emits
 a Tauri event and both windows listen (`useRailSettingsSync`).
+
+### One rule for following the cursor
+
+The rail follows the cursor unless the pointer is on it. That single condition is
+the whole of "never move out from under the hand using it", and crossing to
+another monitor satisfies it by definition.
+
+It took two wrong versions to get there. First the poll was gated on
+`!combined && !open`, and combined mode is always open — blocked twice over, so
+it never followed. Then an open panel was still excluded on the theory that it
+would yank out from under a click, and it followed anyway: every placement makes
+the OS emit a resize, `useRailResize` records it, `sizes` changes identity, and
+the placement effect — keyed on `sizes` — re-ran and re-placed at the cursor's
+monitor. Behaviour worth having, arrived at by accident, and it also overwrote
+the user's remembered size with placement echoes.
+
+Placement is no longer keyed on `sizes`; forgetting a size re-places explicitly,
+because that is the only case that needs it. `setSizeForAnchor` ignores an
+unchanged value so an echo cannot wake anything either.
+

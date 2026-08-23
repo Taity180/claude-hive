@@ -155,52 +155,166 @@ describe("Rail", () => {
     }
   });
 
-  it("follows the cursor in combined mode, and stops while the pointer is on it", async () => {
-    // Combined mode is always open, and the follow poll used to be gated on
-    // `!open` (plus an explicit `!combined`), so it never followed at all.
+  it("follows the cursor whether combined or not, and stops while the pointer is on it", async () => {
+    // One rule: follow unless the pointer is on the rail. An open panel used to
+    // be excluded and then followed anyway, through the placement loop.
+    for (const combined of [true, false]) {
+      vi.useFakeTimers();
+      try {
+        useRailStore.setState(useRailStore.getInitialState(), true);
+        useRailStore.setState({ open: true, combined, followCursor: true });
+        const view = render(<Rail />);
+        await act(async () => {
+          await Promise.resolve();
+          await Promise.resolve();
+        });
+
+        invokeMock.mockClear();
+        act(() => vi.advanceTimersByTime(600));
+        expect(
+          invokeMock.mock.calls.filter((c) => c[0] === "place_rail").length,
+          `combined=${combined} should follow`
+        ).toBeGreaterThan(0);
+
+        act(() => {
+          fireEvent.mouseEnter(screen.getByTestId("rail-root"));
+        });
+        invokeMock.mockClear();
+        act(() => vi.advanceTimersByTime(600));
+        expect(
+          invokeMock.mock.calls.filter((c) => c[0] === "place_rail"),
+          `combined=${combined} must not move under the pointer`
+        ).toHaveLength(0);
+
+        view.unmount();
+      } finally {
+        vi.useRealTimers();
+      }
+    }
+  });
+
+  it("does not re-place itself when a resize is recorded", async () => {
+    // Every placement makes the OS report a resize, which useRailResize stores.
+    // Keying placement on those sizes made it re-trigger itself, so the rail
+    // hopped monitors as a side effect of its own resizing.
+    useRailStore.setState({ open: true, followCursor: false });
+    render(<Rail />);
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    invokeMock.mockClear();
+    act(() => {
+      useRailStore.getState().setSizeForAnchor("right", [600, 700]);
+    });
+    expect(invokeMock.mock.calls.filter((c) => c[0] === "place_rail")).toHaveLength(0);
+  });
+
+  it("collapses a hover-opened rail when the pointer leaves", () => {
+    // Hover opened it and nothing closed it, so the first brush past the edge
+    // left the panel up for good.
     vi.useFakeTimers();
     try {
-      useRailStore.setState({ open: true, combined: true, followCursor: true });
+      useRailStore.setState({ open: true, openOn: "hover" });
       render(<Rail />);
-      // onScreen is resolved from a promise; let it land before counting polls.
-      await act(async () => {
-        await Promise.resolve();
-        await Promise.resolve();
-      });
-
-      invokeMock.mockClear();
+      fireEvent.mouseLeave(screen.getByTestId("rail-root"));
       act(() => vi.advanceTimersByTime(600));
-      const polled = invokeMock.mock.calls.filter((c) => c[0] === "place_rail");
-      expect(polled.length).toBeGreaterThan(0);
-
-      // Pointer on the window: moving it now would move it out from under the
-      // hand using it.
-      act(() => {
-        fireEvent.mouseEnter(screen.getByTestId("rail-root"));
-      });
-      invokeMock.mockClear();
-      act(() => vi.advanceTimersByTime(600));
-      expect(invokeMock.mock.calls.filter((c) => c[0] === "place_rail")).toHaveLength(0);
+      expect(useRailStore.getState().open).toBe(false);
     } finally {
       vi.useRealTimers();
     }
   });
 
-  it("does not follow while a plain rail panel is open", async () => {
+  it("stays open when the pointer comes back before the grace period", () => {
     vi.useFakeTimers();
     try {
-      useRailStore.setState({ open: true, combined: false, followCursor: true });
+      useRailStore.setState({ open: true, openOn: "hover" });
       render(<Rail />);
-      await act(async () => {
-        await Promise.resolve();
-        await Promise.resolve();
-      });
-
-      invokeMock.mockClear();
+      const root = screen.getByTestId("rail-root");
+      fireEvent.mouseLeave(root);
+      act(() => vi.advanceTimersByTime(200));
+      fireEvent.mouseEnter(root);
       act(() => vi.advanceTimersByTime(600));
-      expect(invokeMock.mock.calls.filter((c) => c[0] === "place_rail")).toHaveLength(0);
+      expect(useRailStore.getState().open).toBe(true);
     } finally {
       vi.useRealTimers();
     }
   });
+
+  it("leaves a click-to-open rail alone, and combined mode too", () => {
+    vi.useFakeTimers();
+    try {
+      useRailStore.setState({ open: true, openOn: "click" });
+      render(<Rail />);
+      fireEvent.mouseLeave(screen.getByTestId("rail-root"));
+      act(() => vi.advanceTimersByTime(600));
+      expect(useRailStore.getState().open).toBe(true);
+
+      // Combined mode is the whole window; leaving it must not collapse Hive.
+      useRailStore.setState({ open: true, openOn: "hover", combined: true });
+      fireEvent.mouseLeave(screen.getByTestId("rail-root"));
+      act(() => vi.advanceTimersByTime(600));
+      expect(useRailStore.getState().open).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("follows the cursor whether combined or not, and stops while the pointer is on it", async () => {
+    // One rule: follow unless the pointer is on the rail. An open panel used to
+    // be excluded and then followed anyway, through the placement loop.
+    for (const combined of [true, false]) {
+      vi.useFakeTimers();
+      try {
+        useRailStore.setState(useRailStore.getInitialState(), true);
+        useRailStore.setState({ open: true, combined, followCursor: true });
+        const view = render(<Rail />);
+        await act(async () => {
+          await Promise.resolve();
+          await Promise.resolve();
+        });
+
+        invokeMock.mockClear();
+        act(() => vi.advanceTimersByTime(600));
+        expect(
+          invokeMock.mock.calls.filter((c) => c[0] === "place_rail").length,
+          `combined=${combined} should follow`
+        ).toBeGreaterThan(0);
+
+        act(() => {
+          fireEvent.mouseEnter(screen.getByTestId("rail-root"));
+        });
+        invokeMock.mockClear();
+        act(() => vi.advanceTimersByTime(600));
+        expect(
+          invokeMock.mock.calls.filter((c) => c[0] === "place_rail"),
+          `combined=${combined} must not move under the pointer`
+        ).toHaveLength(0);
+
+        view.unmount();
+      } finally {
+        vi.useRealTimers();
+      }
+    }
+  });
+
+  it("does not re-place itself when a resize is recorded", async () => {
+    // Every placement makes the OS report a resize, which useRailResize stores.
+    // Keying placement on those sizes made it re-trigger itself, so the rail
+    // hopped monitors as a side effect of its own resizing.
+    useRailStore.setState({ open: true, followCursor: false });
+    render(<Rail />);
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    invokeMock.mockClear();
+    act(() => {
+      useRailStore.getState().setSizeForAnchor("right", [600, 700]);
+    });
+    expect(invokeMock.mock.calls.filter((c) => c[0] === "place_rail")).toHaveLength(0);
+  });
+
 });
