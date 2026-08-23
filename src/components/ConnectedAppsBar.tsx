@@ -1,4 +1,5 @@
 import { useHubStore } from "../stores/hubStore";
+import { useRailStore } from "../stores/railStore";
 import { resolveAppIcon } from "../icons/appIcon";
 import { AppIcon } from "./AppIcon";
 import type { AppHealth } from "../types";
@@ -21,6 +22,8 @@ interface ConnectedAppsBarProps {
 
 export function ConnectedAppsBar({ selected, onSelect }: ConnectedAppsBarProps) {
   const apps = useHubStore((s) => s.agentApps);
+  const mutedApps = useRailStore((s) => s.mutedApps);
+  const toggleAppMuted = useRailStore((s) => s.toggleAppMuted);
 
   if (apps.length === 0) {
     return (
@@ -43,6 +46,7 @@ export function ConnectedAppsBar({ selected, onSelect }: ConnectedAppsBarProps) 
     >
       {apps.map((app) => {
         const isSelected = selected === app.id;
+        const isMuted = mutedApps.includes(app.id);
         const icon = resolveAppIcon(app.id, app.label);
         return (
           <button
@@ -54,11 +58,20 @@ export function ConnectedAppsBar({ selected, onSelect }: ConnectedAppsBarProps) 
             data-app-id={app.id}
             data-selected={isSelected ? "true" : undefined}
             data-health={app.health}
-            title={`${app.label} — via ${app.agentName}`}
+            data-muted={isMuted ? "true" : undefined}
+            title={`${app.label} — via ${app.agentName}${
+              isMuted ? " (muted)" : ""
+            }. Right-click to ${isMuted ? "unmute" : "mute"}.`}
             aria-pressed={isSelected}
             // Clicking the selected app clears the filter, so the bar is both
             // the way in and the way back out.
             onClick={() => onSelect(isSelected ? null : app.id)}
+            // Right-click, because the tiles are 25px and have no room for a
+            // per-tile menu button.
+            onContextMenu={(e) => {
+              e.preventDefault();
+              toggleAppMuted(app.id);
+            }}
             className="relative shrink-0 grid place-items-center rounded-md"
             style={{
               width: 25,
@@ -71,6 +84,9 @@ export function ConnectedAppsBar({ selected, onSelect }: ConnectedAppsBarProps) 
                   ? `hsl(${icon.hue} 45% 22%)`
                   : "var(--hub-surface)",
               boxShadow: isSelected ? "none" : "inset 0 0 0 1px var(--hub-hair)",
+              // Dimmed rather than removed: a muted app is still connected, and
+              // hiding it would leave no way to unmute from here.
+              opacity: isMuted ? 0.45 : 1,
             }}
           >
             <AppIcon slug={app.id} label={app.label} />

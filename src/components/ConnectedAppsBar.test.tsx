@@ -1,8 +1,9 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ConnectedAppsBar } from "./ConnectedAppsBar";
 import { useHubStore } from "../stores/hubStore";
+import { useRailStore } from "../stores/railStore";
 
 const apps = [
   { agentId: "a1", agentName: "Grok", id: "gmail", label: "Gmail", health: "ok" as const },
@@ -26,6 +27,8 @@ function nodeFor(appId: string) {
 
 describe("ConnectedAppsBar", () => {
   beforeEach(() => {
+    localStorage.clear();
+    useRailStore.setState(useRailStore.getInitialState(), true);
     useHubStore.setState({ agentApps: apps });
   });
 
@@ -84,5 +87,32 @@ describe("ConnectedAppsBar", () => {
     });
     render(<ConnectedAppsBar selected={null} onSelect={vi.fn()} />);
     expect(screen.getAllByTestId("app-node")).toHaveLength(2);
+  });
+
+  it("marks a muted app", () => {
+    useRailStore.setState({ mutedApps: ["gmail"] });
+    render(<ConnectedAppsBar selected={null} onSelect={vi.fn()} />);
+    expect(nodeFor("gmail")).toHaveAttribute("data-muted", "true");
+    expect(nodeFor("x")).not.toHaveAttribute("data-muted");
+  });
+
+  it("mutes an app from its context menu", () => {
+    // Right-click is the way in: the bar is 25px tiles, with no room for a
+    // per-tile menu button.
+    render(<ConnectedAppsBar selected={null} onSelect={vi.fn()} />);
+    fireEvent.contextMenu(nodeFor("gmail"));
+    expect(useRailStore.getState().isAppMuted("gmail")).toBe(true);
+  });
+
+  it("unmutes on a second right-click", () => {
+    useRailStore.setState({ mutedApps: ["gmail"] });
+    render(<ConnectedAppsBar selected={null} onSelect={vi.fn()} />);
+    fireEvent.contextMenu(nodeFor("gmail"));
+    expect(useRailStore.getState().isAppMuted("gmail")).toBe(false);
+  });
+
+  it("says in the tooltip that right-click mutes", () => {
+    render(<ConnectedAppsBar selected={null} onSelect={vi.fn()} />);
+    expect(nodeFor("gmail").getAttribute("title")).toMatch(/right-click/i);
   });
 });

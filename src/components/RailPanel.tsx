@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useHubStore } from "../stores/hubStore";
+import { useRailStore } from "../stores/railStore";
 import { buildFeed } from "../feed/buildFeed";
 import { AgentPostRow } from "./AgentPostRow";
 import { ConnectedAppsBar } from "./ConnectedAppsBar";
@@ -92,12 +93,14 @@ export function RailPanel() {
   const sessions = useHubStore((s) => s.sessions);
   const agentPosts = useHubStore((s) => s.agentPosts);
   const agents = useHubStore((s) => s.agents);
+  const mutedApps = useRailStore((s) => s.mutedApps);
   const [selectedApp, setSelectedApp] = useState<string | null>(null);
 
   // Ordering lives in buildFeed so it can be tested without rendering.
   const rows = buildFeed(sessions, agentPosts, {
     pinAttention: true,
     appId: selectedApp,
+    mutedApps,
   });
 
   return (

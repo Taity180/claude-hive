@@ -115,4 +115,33 @@ describe("buildFeed", () => {
     const rows = buildFeed([], [broken]);
     expect(rows).toHaveLength(1);
   });
+
+  it("drops a muted app's posts from the merged feed", () => {
+    const rows = buildFeed(
+      [],
+      [post("gmail-1", t(10), "gmail"), post("x-1", t(20), "x")],
+      { mutedApps: ["gmail"] }
+    );
+    expect(rows.map((r) => (r.kind === "post" ? r.post.id : ""))).toEqual(["x-1"]);
+  });
+
+  it("still shows a muted app in its own per-app view", () => {
+    // Muting demotes an app out of All activity; it does not hide it from a
+    // view the user deliberately opened.
+    const rows = buildFeed([], [post("gmail-1", t(10), "gmail")], {
+      appId: "gmail",
+      mutedApps: ["gmail"],
+    });
+    expect(rows).toHaveLength(1);
+  });
+
+  it("never mutes a session", () => {
+    const rows = buildFeed([session("s1", "running", t(30))], [], { mutedApps: ["gmail"] });
+    expect(rows).toHaveLength(1);
+  });
+
+  it("keeps posts with no app when something is muted", () => {
+    const rows = buildFeed([], [post("no-app", t(10), null)], { mutedApps: ["gmail"] });
+    expect(rows).toHaveLength(1);
+  });
 });

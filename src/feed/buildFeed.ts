@@ -9,6 +9,14 @@ export interface BuildFeedOptions {
   pinAttention?: boolean;
   /** Restrict to one app's posts. Sessions are excluded entirely. */
   appId?: string | null;
+  /**
+   * App slugs demoted out of the merged feed.
+   *
+   * Only affects the merged view: a per-app view the user deliberately opened
+   * still shows everything, and sessions are never muted — muting is about a
+   * chatty app, not about hiding the user's own work.
+   */
+  mutedApps?: string[];
 }
 
 /**
@@ -29,7 +37,7 @@ export function buildFeed(
   posts: AgentPost[],
   options: BuildFeedOptions = {}
 ): FeedRow[] {
-  const { pinAttention = false, appId = null } = options;
+  const { pinAttention = false, appId = null, mutedApps = [] } = options;
 
   // A per-app view is about that app. Including Claude sessions there would be
   // answering a question the user did not ask.
@@ -40,13 +48,16 @@ export function buildFeed(
       .sort(byRecency);
   }
 
+  const muted = new Set(mutedApps);
+  const audible = posts.filter((post) => !post.appId || !muted.has(post.appId));
+
   const rows: FeedRow[] = [
     ...sessions.map((session) => ({
       kind: "session" as const,
       session,
       at: session.lastActivity ?? "",
     })),
-    ...posts.map((post) => ({ kind: "post" as const, post, at: post.timestamp })),
+    ...audible.map((post) => ({ kind: "post" as const, post, at: post.timestamp })),
   ];
 
   rows.sort(byRecency);
