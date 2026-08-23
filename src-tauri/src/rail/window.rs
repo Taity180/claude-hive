@@ -72,6 +72,12 @@ pub fn create_hidden(app: &AppHandle) {
         // debugged — so the window has to allow it, even though it paints a
         // solid ground at the default of full opacity.
         .transparent(true)
+        // Both the window and the webview default to white, and it shows: a
+        // resize exposes area the page has not painted yet, and Win32 and
+        // WebView2 fill it with their own background until it does. That is the
+        // white flash before the panel appears — nothing to do with the page,
+        // which is why no amount of CSS moved it.
+        .background_color(tauri::window::Color(0, 0, 0, 0))
         .always_on_top(true)
         .skip_taskbar(true)
         .resizable(true)

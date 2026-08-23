@@ -15,7 +15,7 @@ import { useUsage } from "./hooks/useUsage";
 import { useRailResize } from "./hooks/useRailResize";
 import { useRailSettingsSync } from "./hooks/useRailSettingsSync";
 import { openRail } from "./rail/openRail";
-import { placeRail } from "./rail/placement";
+import { isUserResizing, placeRail } from "./rail/placement";
 
 /**
  * Grace period before a hover-opened rail collapses again.
@@ -249,6 +249,13 @@ export function Rail() {
           if (cancelled) return;
           setPointerInside(over);
           if (!hoverDrives) return;
+
+          // Mid-drag: the cursor is outside the window because that is where
+          // they are dragging the edge to.
+          if (isUserResizing()) {
+            cancelClose();
+            return;
+          }
 
           if (over) {
             cancelClose();

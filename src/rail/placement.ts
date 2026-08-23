@@ -37,6 +37,32 @@ export function markPlacement(): void {
   suppressUntil = Date.now() + SUPPRESS_MS;
 }
 
+/**
+ * How long after a resize the user is assumed to still be dragging.
+ *
+ * A drag arrives as a stream of resize events; this only has to outlast the gap
+ * between two of them.
+ */
+const DRAG_MS = 700;
+
+let draggingUntil = 0;
+
+/** A resize that was not ours: the user has hold of an edge. */
+export function markUserResize(): void {
+  draggingUntil = Date.now() + DRAG_MS;
+}
+
+/**
+ * Is the user resizing the rail right now?
+ *
+ * Hover-close has to stand down while they are. Dragging an edge outward takes
+ * the cursor outside the window — that is what dragging outward means — so the
+ * rail would collapse mid-drag and there was no way to make the panel bigger.
+ */
+export function isUserResizing(): boolean {
+  return Date.now() < draggingUntil;
+}
+
 /** Did we cause the resize that just arrived? */
 export function isOurResize(): boolean {
   return Date.now() < suppressUntil;
@@ -45,4 +71,5 @@ export function isOurResize(): boolean {
 /** Test seam: forget any suppression window. */
 export function resetPlacementGuard(): void {
   suppressUntil = 0;
+  draggingUntil = 0;
 }

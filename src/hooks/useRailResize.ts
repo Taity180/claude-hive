@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { useRailStore } from "../stores/railStore";
-import { isOurResize } from "../rail/placement";
+import { isOurResize, markUserResize } from "../rail/placement";
 
 /**
  * Below this, a reported size is not a panel the user dragged.
@@ -43,6 +43,10 @@ export function useRailResize() {
           const { width, height } = payload;
           if (width < MIN_PANEL_WIDTH || height < MIN_PANEL_HEIGHT) return;
 
+          // Tells hover-close to stand down: dragging an edge outward puts the
+          // cursor outside the window, which otherwise collapsed the rail
+          // mid-drag.
+          markUserResize();
           setSizeForAnchor(anchor, [width, height]);
         });
         if (cancelled) {

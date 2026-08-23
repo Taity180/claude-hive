@@ -34,6 +34,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { Rail } from "./Rail";
 import { useRailStore } from "./stores/railStore";
 import { useHubStore } from "./stores/hubStore";
+import { markUserResize, resetPlacementGuard } from "./rail/placement";
 
 const invokeMock = vi.mocked(invoke);
 
@@ -57,6 +58,7 @@ async function tick(ms: number, step = 100) {
 describe("Rail", () => {
   beforeEach(() => {
     localStorage.clear();
+    resetPlacementGuard();
     invokeMock.mockClear().mockResolvedValue(null);
     useRailStore.setState(useRailStore.getInitialState(), true);
     useHubStore.setState({
@@ -483,6 +485,38 @@ describe("Rail", () => {
       expect(screen.queryByTestId("rail-nub")).toBeNull();
     } finally {
       raf.mockRestore();
+    }
+  });
+
+  it("does not collapse while the user is dragging the panel bigger", async () => {
+    // Dragging an edge outward puts the cursor outside the window — that is what
+    // dragging outward means — so hover-close collapsed the rail mid-drag and
+    // the panel could not be made bigger at all.
+    vi.useFakeTimers();
+    try {
+      invokeMock.mockImplementation((cmd: string) =>
+        cmd === "cursor_over_rail" ? Promise.resolve(false) : Promise.resolve(null)
+      );
+      useRailStore.setState({ open: true, openOn: "hover", followCursor: false });
+      render(<Rail />);
+      await act(async () => {
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      // A drag arrives as a stream of resize events.
+      for (let i = 0; i < 4; i++) {
+        markUserResize();
+        await tick(200);
+      }
+      expect(useRailStore.getState().open).toBe(true);
+
+      // Let go, and it collapses as usual.
+      resetPlacementGuard();
+      await tick(400);
+      expect(useRailStore.getState().open).toBe(false);
+    } finally {
+      vi.useRealTimers();
     }
   });
 });
