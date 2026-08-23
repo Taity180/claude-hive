@@ -1,6 +1,41 @@
 import { create } from "zustand";
 import { broadcastRailSettings } from "./railSync";
 
+/**
+ * A pane in the rail, including which settings child.
+ *
+ * Lives here rather than in the component because it is persisted: the pane you
+ * were on should survive the panel closing, and a store that owns the value can
+ * validate what it loads.
+ */
+export type RailPaneId =
+  | "sessions"
+  | "activity"
+  | "tasks"
+  | "agents"
+  | "settings:position"
+  | "settings:behaviour"
+  | "settings:appearance"
+  | "settings:muted"
+  | "settings:setup";
+
+const RAIL_PANE_IDS: RailPaneId[] = [
+  "sessions",
+  "activity",
+  "tasks",
+  "agents",
+  "settings:position",
+  "settings:behaviour",
+  "settings:appearance",
+  "settings:muted",
+  "settings:setup",
+];
+
+/** Stored settings can be hand-edited or left over from an older build. */
+export function isRailPaneId(value: unknown): value is RailPaneId {
+  return typeof value === "string" && RAIL_PANE_IDS.includes(value as RailPaneId);
+}
+
 export type AnchorId =
   | "left"
   | "right"
@@ -124,6 +159,16 @@ interface Persisted {
   panelOpacity: number;
   sidebarOpacity: number;
   /**
+   * The pane last looked at, restored when the rail opens again.
+   *
+   * Closing the rail is not the same as being finished with it — it collapses on
+   * a cursor leaving. Coming back to a different pane than you left means losing
+   * your place several times an hour.
+   */
+  lastPane: RailPaneId;
+  /** The app the feed was filtered to, or null for everything. */
+  lastApp: string | null;
+  /**
    * App slugs demoted out of the merged feed. Per app rather than per agent, so
    * a noisy Gmail can be quieted without silencing the agent reporting it.
    */
@@ -143,6 +188,8 @@ const DEFAULTS: Persisted = {
   pinnedMonitor: null,
   panelOpacity: 1,
   sidebarOpacity: 1,
+  lastPane: "activity",
+  lastApp: null,
   mutedApps: [],
 };
 
@@ -150,7 +197,11 @@ function load(): Persisted {
   try {
     const raw = localStorage.getItem(RAIL_STORAGE_KEY);
     if (!raw) return DEFAULTS;
-    return { ...DEFAULTS, ...(JSON.parse(raw) as Partial<Persisted>) };
+    const stored = { ...DEFAULTS, ...(JSON.parse(raw) as Partial<Persisted>) };
+    // A pane removed in a later build, or a hand-edited file, must not leave the
+    // rail rendering nothing.
+    if (!isRailPaneId(stored.lastPane)) stored.lastPane = DEFAULTS.lastPane;
+    return stored;
   } catch {
     // Corrupt settings should cost the user their preferences, not the window.
     return DEFAULTS;
@@ -172,6 +223,8 @@ interface RailState extends Persisted {
   setHideWhenIdle: (hide: boolean) => void;
   setCombined: (combined: boolean) => void;
   setPinnedMonitor: (index: number | null) => void;
+  setLastPane: (pane: RailPaneId) => void;
+  setLastApp: (appId: string | null) => void;
   setPanelOpacity: (value: number) => void;
   setSidebarOpacity: (value: number) => void;
   toggleAppMuted: (appId: string) => void;
@@ -193,6 +246,8 @@ export const useRailStore = create<RailState>((set, get) => {
       pinnedMonitor,
       panelOpacity,
       sidebarOpacity,
+      lastPane,
+      lastApp,
       mutedApps,
     } = get();
     try {
@@ -210,6 +265,8 @@ export const useRailStore = create<RailState>((set, get) => {
           pinnedMonitor,
           panelOpacity,
           sidebarOpacity,
+          lastPane,
+          lastApp,
           mutedApps,
         })
       );
@@ -263,6 +320,16 @@ export const useRailStore = create<RailState>((set, get) => {
       set({ openOn });
       persist();
       broadcastRailSettings({ openOn });
+    },
+    setLastPane: (lastPane) => {
+      set({ lastPane });
+      persist();
+      broadcastRailSettings({ lastPane });
+    },
+    setLastApp: (lastApp) => {
+      set({ lastApp });
+      persist();
+      broadcastRailSettings({ lastApp });
     },
     setPanelOpacity: (value) => {
       const panelOpacity = clampOpacity(value);

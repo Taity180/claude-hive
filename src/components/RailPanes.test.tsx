@@ -108,6 +108,7 @@ describe("RailPanes", () => {
 
   it("counts sessions needing attention", () => {
     useRailStore.getState().setCombined(true);
+    useRailStore.getState().setLastPane("sessions");
     useHubStore.setState({
       sessions: [
         { sessionHandle: 1, status: "waiting_for_input" },
@@ -128,6 +129,7 @@ describe("RailPanes", () => {
 
   it("follows Hive's own navigation instead of leaving a dead click", async () => {
     useRailStore.getState().setCombined(true);
+    useRailStore.getState().setLastPane("sessions");
     // The dashboard's rows set viewState; if the pane only ever rendered the
     // dashboard, clicking a session would change state and show nothing.
     useHubStore.setState({ viewState: "settings" });
@@ -176,4 +178,41 @@ describe("RailPanes", () => {
     await userEvent.click(screen.getByRole("button", { name: /^Tasks/ }));
     expect(screen.queryByRole("button", { name: "Appearance" })).toBeNull();
   });
+
+  it("comes back to the pane it was left on", () => {
+    // The rail collapses whenever the cursor leaves, so landing somewhere else
+    // each time would lose the reader's place several times an hour.
+    useRailStore.getState().setLastPane("settings:appearance");
+    render(<RailPanes />);
+    expect(screen.getByLabelText("Window opacity")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Appearance" })).toHaveAttribute(
+      "aria-pressed",
+      "true"
+    );
+  });
+
+  it("remembers the pane across a remount, as closing and reopening does", async () => {
+    const first = render(<RailPanes />);
+    await userEvent.click(screen.getByRole("button", { name: /^Tasks/ }));
+    first.unmount();
+
+    render(<RailPanes />);
+    expect(screen.getByTestId("task-add-input")).toBeInTheDocument();
+  });
+
+  it("remembers the app the feed was filtered to", async () => {
+    useHubStore.setState({
+      agentApps: [
+        { agentId: "a1", agentName: "Grok Bot", id: "gmail", label: "Gmail", health: "ok" },
+      ] as never,
+    });
+    const first = render(<RailPanes />);
+    await userEvent.click(screen.getByTitle(/Gmail/));
+    expect(useRailStore.getState().lastApp).toBe("gmail");
+    first.unmount();
+
+    render(<RailPanes />);
+    expect(screen.getByTitle(/Gmail/)).toHaveAttribute("data-selected", "true");
+  });
+
 });

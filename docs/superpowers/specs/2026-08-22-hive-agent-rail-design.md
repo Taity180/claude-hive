@@ -458,6 +458,12 @@ effect changes with another setting has to say so.
 
 ### Settings, and where Hive's went
 
+The pane you were last on is remembered, along with the app the feed was
+filtered to — the rail collapses whenever the cursor leaves, so landing
+somewhere else each time would lose your place several times an hour. It is
+validated on load: a pane id from an older build, or a hand-edited file, falls
+back rather than rendering a pane with nothing behind it.
+
 The rail's settings are five child panes under one sidebar row — Position,
 Behaviour, Appearance, Muted apps, Plugin setup — rather than five permanent rows
 or one long scroll. The row expands when it is the pane and marks itself active

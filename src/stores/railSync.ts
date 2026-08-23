@@ -1,6 +1,6 @@
 import { emit, listen } from "@tauri-apps/api/event";
 // Type-only, so there is no runtime import cycle with railStore.
-import type { AnchorId, OpenOn, RestingForm } from "./railStore";
+import type { AnchorId, OpenOn, RailPaneId, RestingForm } from "./railStore";
 
 export const RAIL_SETTINGS_EVENT = "rail-settings-changed";
 
@@ -30,6 +30,8 @@ export interface RailSettingsPatch {
   pinnedMonitor?: number | null;
   panelOpacity?: number;
   sidebarOpacity?: number;
+  lastPane?: RailPaneId;
+  lastApp?: string | null;
   mutedApps?: string[];
 }
 

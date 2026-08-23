@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { useHubStore } from "../stores/hubStore";
 import { RailPanel } from "./RailPanel";
 import { TasksPane } from "./TasksPane";
@@ -8,14 +7,14 @@ import { ExpandedDashboard } from "./ExpandedDashboard";
 import { SessionDetail } from "./SessionDetail";
 import { Settings } from "./Settings";
 import { ConnectedAppsBar } from "./ConnectedAppsBar";
-import { useRailStore, withOpacity } from "../stores/railStore";
+import {
+  useRailStore,
+  withOpacity,
+  type RailPaneId,
+} from "../stores/railStore";
 
-type PaneId =
-  | "sessions"
-  | "activity"
-  | "tasks"
-  | "agents"
-  | `settings:${SettingsSection}`;
+/** The store owns this, because the pane is remembered across closings. */
+type PaneId = RailPaneId;
 
 /** The settings children, in the order they read. */
 const SETTINGS_CHILDREN: { id: PaneId; label: string }[] = [
@@ -126,12 +125,18 @@ export function RailPanes() {
   // itself is the rail's layout either way — it was a row of tabs first, and a
   // sidebar reads better at every width the rail is ever given.
   const groups = combined ? [HIVE_GROUP, RAIL_GROUP] : [RAIL_GROUP];
-  const [pane, setPane] = useState<PaneId>(combined ? "sessions" : "activity");
+  // Remembered rather than local: the rail collapses on a cursor leaving, so
+  // coming back to a different pane than you left would lose your place several
+  // times an hour.
+  const pane = useRailStore((s) => s.lastPane);
+  const setPane = useRailStore((s) => s.setLastPane);
   const section = sectionOf(pane);
   // The connector strip sits above every pane here rather than inside the feed,
   // so the connected apps stay in view whichever pane is showing. Picking one
-  // still filters the feed, so the selection has to live above both.
-  const [selectedApp, setSelectedApp] = useState<string | null>(null);
+  // still filters the feed, so the selection has to live above both — and it is
+  // remembered for the same reason the pane is.
+  const selectedApp = useRailStore((s) => s.lastApp);
+  const setSelectedApp = useRailStore((s) => s.setLastApp);
   const sessions = useHubStore((s) => s.sessions);
   const tasks = useHubStore((s) => s.tasks);
   const agents = useHubStore((s) => s.agents);

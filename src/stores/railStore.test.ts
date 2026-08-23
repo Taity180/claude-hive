@@ -1,5 +1,12 @@
-import { beforeEach, describe, expect, it } from "vitest";
-import { clampOpacity, useRailStore, withOpacity, RAIL_STORAGE_KEY, MIN_OPACITY } from "./railStore";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  clampOpacity,
+  isRailPaneId,
+  useRailStore,
+  withOpacity,
+  RAIL_STORAGE_KEY,
+  MIN_OPACITY,
+} from "./railStore";
 
 describe("railStore", () => {
   beforeEach(() => {
@@ -119,5 +126,40 @@ describe("railStore", () => {
     expect(clampOpacity(Number.NaN)).toBe(1);
     expect(withOpacity("red", 0.5)).toBe("color-mix(in srgb, red 50%, transparent)");
     expect(withOpacity("red", 2)).toBe("color-mix(in srgb, red 100%, transparent)");
+  });
+
+  it("remembers the pane and the app filter", () => {
+    useRailStore.getState().setLastPane("settings:appearance");
+    useRailStore.getState().setLastApp("gmail");
+
+    const saved = JSON.parse(localStorage.getItem(RAIL_STORAGE_KEY) ?? "{}");
+    expect(saved.lastPane).toBe("settings:appearance");
+    expect(saved.lastApp).toBe("gmail");
+  });
+
+  it("recognises only panes that exist", () => {
+    expect(isRailPaneId("tasks")).toBe(true);
+    expect(isRailPaneId("settings:appearance")).toBe(true);
+    expect(isRailPaneId("settings:removed-in-a-later-build")).toBe(false);
+    expect(isRailPaneId(undefined)).toBe(false);
+    expect(isRailPaneId(7)).toBe(false);
+  });
+
+  it("falls back to a real pane when the stored one no longer exists", async () => {
+    // A hand-edited file, or one left by an older build. Restoring it verbatim
+    // would render a pane that no longer has any content behind it.
+    localStorage.setItem(
+      RAIL_STORAGE_KEY,
+      JSON.stringify({ anchor: "left", lastPane: "settings:removed-in-a-later-build" })
+    );
+
+    // A fresh module, because the store reads localStorage once at load.
+    vi.resetModules();
+    const fresh = await import("./railStore");
+    const state = fresh.useRailStore.getState();
+
+    expect(state.lastPane).toBe("activity");
+    // The rest of the stored settings survive the one bad field.
+    expect(state.anchor).toBe("left");
   });
 });
