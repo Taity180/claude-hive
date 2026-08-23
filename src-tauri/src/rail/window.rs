@@ -208,6 +208,10 @@ const FRAME_MS: u64 = 16;
 /// over the same window.
 static ANIMATION: AtomicU64 = AtomicU64::new(0);
 
+/// Last monitor the rail was placed on, so a change can be logged without
+/// logging the four placements a second that do not move it.
+static LAST_MONITOR: AtomicU64 = AtomicU64::new(u64::MAX);
+
 fn apply_rect(rail: &tauri::WebviewWindow, rect: Rect, growing: bool) -> Result<(), String> {
     let position = tauri::Position::Physical(tauri::PhysicalPosition { x: rect.x, y: rect.y });
     let size = tauri::Size::Physical(tauri::PhysicalSize {
@@ -251,6 +255,10 @@ async fn animate_to(rail: tauri::WebviewWindow, to: Rect) {
     }
     let growing = to.width > from.width || to.height > from.height;
 
+    diag(&format!(
+        "animate: {}x{} at ({}, {}) -> {}x{} at ({}, {})",
+        from.width, from.height, from.x, from.y, to.width, to.height, to.x, to.y
+    ));
     let generation = ANIMATION.fetch_add(1, Ordering::SeqCst) + 1;
     let frames = (ANIMATION_MS / FRAME_MS).max(1);
 
@@ -300,6 +308,15 @@ fn position_rail(
         }
     };
     let index = target_index(&monitors, pinned, cursor);
+
+    // Only when it actually changes screen: this runs four times a second.
+    let previous = LAST_MONITOR.swap(index as u64, Ordering::SeqCst);
+    if previous != index as u64 {
+        diag(&format!(
+            "place_rail: monitor {previous} -> {index}, size {}x{}",
+            size.0, size.1
+        ));
+    }
 
     let (x, y) = anchored_position(monitors[index], anchor, size, offset);
     let target = Rect {

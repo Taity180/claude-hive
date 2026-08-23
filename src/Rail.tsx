@@ -21,9 +21,10 @@ import { placeRail } from "./rail/placement";
  * Grace period before a hover-opened rail collapses again.
  *
  * Long enough to cross a gap between the panel and a control, short enough that
- * the rail does not feel stuck open. Was 500ms, which read as hanging around.
+ * the rail does not feel stuck open. Went 500 → 250 → 100ms; the earlier values
+ * read as the panel hanging around after the cursor had gone.
  */
-const HOVER_CLOSE_MS = 250;
+const HOVER_CLOSE_MS = 100;
 
 /**
  * How often the cursor is checked against the rail's rect.
