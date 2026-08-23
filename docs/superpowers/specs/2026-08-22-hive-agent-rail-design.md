@@ -309,6 +309,29 @@ phases that creates or reparents a window must respect them.
 - **`HIVE_RAIL_AUTOOPEN=1`** opens the rail at startup through the same `show()`
   path as a real click, so window placement can be verified without a human.
 
+## A recurring failure mode: functions wired to nothing
+
+Three features shipped with their logic written, tested, and unreachable:
+
+| Function | Existed since | Nothing called it until |
+|---|---|---|
+| `close_rail` | phase 2 | the rail could not be dismissed at all |
+| `setSizeForAnchor` | phase 2 | dragging the rail's edge did nothing |
+| `addTaskNote` | phase 4 | there was no way to write a note |
+
+Each had passing tests. Each was invisible to the test suite, because a unit
+test proves a function behaves, never that anything reaches it.
+
+**The check, before calling any phase done:** for every public function added,
+name the user action that reaches it. If there is no such action, either wire it
+or delete it. "The store method exists and is tested" is not evidence of a
+working feature.
+
+A second habit that would have caught two of these: the affordance has to exist
+before the state it depends on. The notes toggle only rendered once a note
+existed, so the first note could never be written — a bootstrap gap no test with
+seeded data would find.
+
 ## Risks
 
 | Risk | Mitigation |
