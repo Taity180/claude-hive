@@ -500,3 +500,29 @@ window, so there is always one frame between `set_position` and `set_size`. Whic
 order hides that frame depends on the direction — opening out from the nub, move
 first and the frame is inside the final rect; collapsing back, resize first. The
 wrong order leaves the window briefly hanging off the screen edge.
+
+### Opening is the window growing
+
+The last of the flash was the frosted backdrop. Acrylic is painted by the
+compositor the moment the window has size, so a window that arrives at full size
+shows a blank frosted rectangle for a frame however fast the content follows.
+CSS cannot help: by then the window already exists.
+
+So the window itself grows. `animate_rail` interpolates from wherever the rail is
+to the target rect over 140ms, ease-out, ~16ms a frame, and there is nothing left
+to flash because the rect is never bigger than what has been drawn. An atomic
+counter means a newer animation supersedes a running one, and any un-animated
+placement takes ownership — a cursor-follow tick mid-animation stops it rather
+than fighting frame by frame.
+
+Two things follow from the window being the motion:
+
+- The panel is laid out at its **final** size while the window is still growing,
+  so it is revealed rather than reflowed eight times on the way.
+- The content only fades in. The old per-edge slide translated it as well, which
+  on top of a growing window read as two separate things moving; those four
+  keyframe blocks are gone.
+
+`animate_rail` is a separate command rather than a flag on `place_rail`, because
+the cursor-follow poll must never animate: four animations a second would be a
+permanent slow drift instead of a move.

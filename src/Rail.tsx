@@ -3,7 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { useTheme } from "./hooks/useTheme";
 import { useWebSocket } from "./hooks/useWebSocket";
-import { isHorizontalAnchor, nubSize, useRailStore, withOpacity } from "./stores/railStore";
+import { nubSize, useRailStore, withOpacity } from "./stores/railStore";
 import { RailNub } from "./components/RailNub";
 import { RailChrome } from "./components/RailChrome";
 import { RailPanes } from "./components/RailPanes";
@@ -20,9 +20,9 @@ import { openRail } from "./rail/openRail";
  * Grace period before a hover-opened rail collapses again.
  *
  * Long enough to cross a gap between the panel and a control, short enough that
- * the rail does not feel stuck open.
+ * the rail does not feel stuck open. Was 500ms, which read as hanging around.
  */
-const HOVER_CLOSE_MS = 500;
+const HOVER_CLOSE_MS = 250;
 
 /**
  * How often the cursor is checked against the rail's rect.
@@ -58,18 +58,11 @@ export function Rail() {
   // The rail window is created hidden at startup, so this component mounts long
   // before it is on screen. Rust tells us when that changes; without it the
   // cursor-follow poll below would run all day against a hidden window.
-  // Which edge the panel grows from, so the slide-in runs the right way.
-  const anchorSide = isHorizontalAnchor(anchor)
-    ? anchor === "top"
-      ? "top"
-      : "bottom"
-    : anchor === "left" || anchor === "tl" || anchor === "bl"
-      ? "left"
-      : "right";
   const [onScreen, setOnScreen] = useState(false);
   // Whether the pointer is over the rail. Combined mode follows the cursor only
   // while it is not, so the window never moves under the hand using it.
   const [pointerInside, setPointerInside] = useState(false);
+  const [panelWidth, panelHeight] = currentSize();
   useEffect(() => {
     const stop = listen<boolean>("rail-visibility", (e) => setOnScreen(e.payload));
 
@@ -98,14 +91,20 @@ export function Rail() {
   // side effect of its own resizing. A size the user dragged is already on
   // screen; the only case that needs a fresh placement is forgetting a size,
   // which the settings row does itself.
+  // Opening and collapsing are animated; everything else places at once. An
+  // anchor change is the user asking for a different edge, and sliding across
+  // the desktop to get there would read as the window escaping.
+  const wasOpen = useRef(open);
   useEffect(() => {
     if (!onScreen) return;
     const [width, height] = open ? currentSize() : nubSize(anchor, restingForm);
-    invoke("place_rail", { anchor, width, height, offset, monitor: pinnedMonitor }).catch(
-      (err) => {
-        console.error("[hive] place_rail failed:", err);
-      }
-    );
+    const transition = wasOpen.current !== open;
+    wasOpen.current = open;
+
+    const args = { anchor, width, height, offset, monitor: pinnedMonitor };
+    invoke(transition ? "animate_rail" : "place_rail", args).catch((err) => {
+      console.error("[hive] placing the rail failed:", err);
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [onScreen, open, combined, anchor, offset, restingForm, pinnedMonitor]);
 
@@ -259,9 +258,17 @@ export function Rail() {
     >
       {open ? (
         <div
-          className="flex flex-col h-full rail-slide-in"
-          data-anchor-side={anchorSide}
-          style={{ background: withOpacity("var(--hub-bg-solid, #141414)", panelOpacity) }}
+          className="flex flex-col rail-slide-in"
+          style={{
+            background: withOpacity("var(--hub-bg-solid, #141414)", panelOpacity),
+            // Laid out for the final size rather than the window's current one,
+            // so growing into place reveals the panel instead of reflowing it
+            // eight times on the way.
+            width: panelWidth,
+            height: panelHeight,
+            maxWidth: "100vw",
+            maxHeight: "100vh",
+          }}
         >
           <div
             data-tauri-drag-region

@@ -377,4 +377,47 @@ describe("Rail", () => {
       .parentElement!.parentElement as HTMLElement;
     expect(sidebar.style.background).toContain("90%");
   });
+
+  it("animates opening and collapsing, but places everything else at once", async () => {
+    // The follow poll must never animate: four animations a second would be a
+    // permanent slow drift rather than a move.
+    invokeMock.mockImplementation((cmd: string) =>
+      cmd === "cursor_over_rail" ? Promise.resolve(false) : Promise.resolve(null)
+    );
+    useRailStore.setState({ open: false, openOn: "click", followCursor: false });
+    render(<Rail />);
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    invokeMock.mockClear();
+    await act(async () => {
+      useRailStore.getState().setOpen(true);
+      await Promise.resolve();
+    });
+    expect(invokeMock.mock.calls.map((c) => c[0])).toContain("animate_rail");
+
+    // An anchor change is the user asking for a different edge; sliding across
+    // the desktop to get there would read as the window escaping.
+    invokeMock.mockClear();
+    await act(async () => {
+      useRailStore.getState().setAnchor("left");
+      await Promise.resolve();
+    });
+    const commands = invokeMock.mock.calls.map((c) => c[0]);
+    expect(commands).toContain("place_rail");
+    expect(commands).not.toContain("animate_rail");
+  });
+
+  it("lays the panel out at its final size while the window is still growing", async () => {
+    // Otherwise the content reflows on every frame of the animation.
+    useRailStore.setState({ open: true, anchor: "right" });
+    useRailStore.getState().setSizeForAnchor("right", [480, 700]);
+    render(<Rail />);
+
+    const panel = screen.getByTestId("rail-root").firstElementChild as HTMLElement;
+    expect(panel.style.width).toBe("480px");
+    expect(panel.style.height).toBe("700px");
+  });
 });
