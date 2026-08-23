@@ -1,5 +1,5 @@
 use crate::rail::geometry::{
-    anchored_position, primary_index, target_index, Anchor, MonitorRect,
+    anchored_position, primary_index, rect_contains, target_index, Anchor, MonitorRect,
 };
 use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder};
 
@@ -247,6 +247,33 @@ pub fn place_rail(
         return Ok(());
     };
     position_rail(&app, &rail, anchor, (width, height), offset, monitor)
+}
+
+/// Is the cursor over the rail right now?
+///
+/// Hover-to-open cannot rely on the webview's own mouse events. A 32px strip at
+/// the screen edge often never receives a `mouseenter`: with cursor-follow on it
+/// worked only by accident, because repositioning the window four times a second
+/// made Windows re-run hit-testing and synthesise the event. Pinned to a
+/// monitor there is no poll, and hovering did nothing at all.
+///
+/// Asking for the cursor and the window rect is the same question without the
+/// accident.
+#[tauri::command]
+pub fn cursor_over_rail(app: AppHandle) -> Result<bool, String> {
+    let Some(rail) = app.get_webview_window(RAIL_LABEL) else {
+        return Ok(false);
+    };
+
+    let cursor = rail.cursor_position().map_err(|e| e.to_string())?;
+    let origin = rail.outer_position().map_err(|e| e.to_string())?;
+    let size = rail.outer_size().map_err(|e| e.to_string())?;
+
+    Ok(rect_contains(
+        (origin.x, origin.y),
+        (size.width, size.height),
+        (cursor.x as i32, cursor.y as i32),
+    ))
 }
 
 /// One screen, as the settings pane needs to describe it.

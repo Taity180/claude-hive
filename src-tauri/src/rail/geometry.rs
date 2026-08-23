@@ -84,6 +84,17 @@ pub fn monitor_containing(monitors: &[MonitorRect], cursor: (i32, i32)) -> Optio
     })
 }
 
+/// Is `point` inside the rect at `origin` of `size`?
+///
+/// Half-open on the far edges, like `monitor_containing`: a cursor exactly on
+/// the boundary belongs to one rect, not two.
+pub fn rect_contains(origin: (i32, i32), size: (u32, u32), point: (i32, i32)) -> bool {
+    let (x, y) = origin;
+    let (w, h) = size;
+    let (px, py) = point;
+    px >= x && px < x + w as i32 && py >= y && py < y + h as i32
+}
+
 /// Which monitor the rail belongs on.
 ///
 /// A pin wins outright: the user asked for that screen, so a cursor on another
@@ -300,5 +311,24 @@ mod tests {
         let monitors = four_screens();
         let cursor = (monitors[1].x + 10, monitors[1].y + 10);
         assert_eq!(target_index(&monitors, None, Some(cursor)), 1);
+    }
+
+    #[test]
+    fn rect_contains_is_half_open_on_the_far_edges() {
+        let origin = (2528, 650);
+        let size = (32u32, 140u32);
+
+        assert!(rect_contains(origin, size, (2528, 650)), "the top-left corner is inside");
+        assert!(rect_contains(origin, size, (2540, 700)));
+        assert!(!rect_contains(origin, size, (2560, 700)), "the far edge is outside");
+        assert!(!rect_contains(origin, size, (2540, 790)));
+        assert!(!rect_contains(origin, size, (2527, 700)), "one pixel short is outside");
+    }
+
+    #[test]
+    fn rect_contains_handles_a_negative_origin() {
+        // Monitors left of the primary report negative coordinates.
+        assert!(rect_contains((-1920, 141), (32, 140), (-1900, 200)));
+        assert!(!rect_contains((-1920, 141), (32, 140), (-1930, 200)));
     }
 }

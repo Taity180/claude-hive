@@ -433,3 +433,18 @@ paints a solid ground at the default of 100%.
 
 Floored at 30%. A rail faded to nothing is one the user cannot find again —
 the same reasoning as dimming rather than hiding when idle.
+
+### Hover is decided by the cursor, not by DOM events
+
+A 32px strip at the screen edge often never receives a `mouseenter`, and an open
+panel often never receives the matching `mouseleave`. Hover-to-open appeared to
+work anyway — **by accident**: with cursor-follow on, repositioning the window
+four times a second made Windows re-run hit-testing and synthesise the events.
+Pin the rail to a monitor and the poll stops, so hovering did nothing at all;
+leave the panel and it never closed.
+
+`cursor_over_rail` compares the cursor against the window's own rect in Rust,
+and the frontend polls it every 200ms whenever hover or cursor-follow is on. Same
+question, no accident, and it behaves identically however the rail is placed.
+The DOM `mouseenter` on the nub is kept only because it opens instantly when the
+event does arrive.

@@ -23,6 +23,14 @@ import { useRailSettingsSync } from "./hooks/useRailSettingsSync";
  */
 const HOVER_CLOSE_MS = 500;
 
+/**
+ * How often the cursor is checked against the rail's rect.
+ *
+ * Fast enough that opening on hover does not feel delayed, and the same cost as
+ * the placement poll it sits beside.
+ */
+const CURSOR_POLL_MS = 200;
+
 export function Rail() {
   useTheme();
   useWebSocket();
@@ -147,11 +155,18 @@ export function Rail() {
     currentSize,
   ]);
 
-  // Hover opens the rail; something has to close it again. Without this the
-  // panel stayed open forever after the first brush past the edge, which is
-  // worse than click-to-open — there was no way back to the nub but the
-  // collapse button.
-  const hoverCloses = openOn === "hover" && !combined;
+  // Hover, decided by where the cursor actually is rather than by DOM events.
+  //
+  // A 32px strip at the screen edge often never receives a `mouseenter`, and an
+  // open panel often never receives the matching `mouseleave`. With
+  // cursor-follow on it appeared to work, by accident: repositioning the window
+  // four times a second made Windows re-run hit-testing and synthesise the
+  // events. Pinned to a monitor there is no poll, so hovering did nothing — and
+  // in the other direction the panel would not close again.
+  //
+  // Asking Rust whether the cursor is over the window is the same question with
+  // no accident in it, and it behaves the same however the rail is placed.
+  const hoverDrives = openOn === "hover" && !combined;
   const closeTimer = useRef<number | null>(null);
 
   const cancelClose = useCallback(() => {
@@ -161,29 +176,55 @@ export function Rail() {
     }
   }, []);
 
-  const scheduleClose = useCallback(() => {
-    if (!hoverCloses) return;
-    cancelClose();
-    closeTimer.current = window.setTimeout(() => {
-      closeTimer.current = null;
-      // Typing counts as using it. The composer sits at the bottom edge, so the
-      // pointer is often outside the window while the reply is half-written.
-      const focused = document.activeElement;
-      if (
-        focused instanceof HTMLInputElement ||
-        focused instanceof HTMLTextAreaElement
-      ) {
-        return;
-      }
-      setOpen(false);
-    }, HOVER_CLOSE_MS);
-  }, [hoverCloses, cancelClose, setOpen]);
-
-  // A pending close must not fire after the setting changes or the rail closes.
   useEffect(() => {
-    if (!hoverCloses) cancelClose();
-    return cancelClose;
-  }, [hoverCloses, cancelClose]);
+    if (!onScreen) return;
+    // Only ever needed for hover, or to know not to move the window out from
+    // under the hand that is using it.
+    if (!hoverDrives && !followCursor) return;
+
+    let cancelled = false;
+    const id = window.setInterval(() => {
+      void invoke<boolean>("cursor_over_rail")
+        .then((over) => {
+          if (cancelled) return;
+          setPointerInside(over);
+          if (!hoverDrives) return;
+
+          if (over) {
+            cancelClose();
+            setOpen(true);
+            return;
+          }
+
+          // Away: close after a grace period, so crossing a gap between the
+          // panel and something next to it does not dismiss it.
+          if (closeTimer.current !== null) return;
+          closeTimer.current = window.setTimeout(() => {
+            closeTimer.current = null;
+            // Typing counts as using it. The composer sits at the bottom edge,
+            // so the pointer is often outside while a reply is half-written.
+            const focused = document.activeElement;
+            if (
+              focused instanceof HTMLInputElement ||
+              focused instanceof HTMLTextAreaElement
+            ) {
+              return;
+            }
+            setOpen(false);
+          }, HOVER_CLOSE_MS);
+        })
+        .catch(() => {
+          // Not under Tauri, or a transient failure while displays change.
+          // Losing one sample must not kill the interval.
+        });
+    }, CURSOR_POLL_MS);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+      cancelClose();
+    };
+  }, [onScreen, hoverDrives, followCursor, cancelClose, setOpen]);
 
   // The rail is a decorationless window, so the title bar has to move it. Same
   // handler Hive's own bar uses; buttons are excluded or dragging would eat the
@@ -210,14 +251,6 @@ export function Rail() {
       // here show the desktop rather than rendering white.
       style={{ background: "transparent" }}
       data-testid="rail-root"
-      onMouseLeave={() => {
-        setPointerInside(false);
-        if (open) scheduleClose();
-      }}
-      onMouseEnter={() => {
-        setPointerInside(true);
-        cancelClose();
-      }}
     >
       {open ? (
         <div
