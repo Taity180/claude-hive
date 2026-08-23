@@ -1,5 +1,5 @@
 use crate::rail::geometry::{
-    anchored_position, monitor_containing, primary_index, Anchor, MonitorRect,
+    anchored_position, primary_index, target_index, Anchor, MonitorRect,
 };
 use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder};
 
@@ -80,7 +80,7 @@ pub fn create_hidden(app: &AppHandle) {
 
     // Park it on an edge now, so the first frame after `show()` is already in
     // the right place rather than jumping once the rail's JS loads.
-    match position_rail(app, &rail, DEFAULT_ANCHOR, DEFAULT_NUB, DEFAULT_OFFSET) {
+    match position_rail(app, &rail, DEFAULT_ANCHOR, DEFAULT_NUB, DEFAULT_OFFSET, None) {
         Ok(()) => diag("create_hidden: built and placed"),
         Err(e) => diag(&format!("create_hidden: placement FAILED: {e}")),
     }
@@ -155,6 +155,7 @@ fn position_rail(
     anchor: Anchor,
     size: (u32, u32),
     offset: i32,
+    pinned: Option<usize>,
 ) -> Result<(), String> {
     let monitors = monitor_rects(app)?;
     if monitors.is_empty() {
@@ -162,23 +163,19 @@ fn position_rail(
     }
 
     // Cursor position is best-effort. If it fails, or the cursor is in the dead
-    // space between screens of different heights, fall back to the primary
-    // monitor rather than giving up — a rail on the wrong screen is recoverable,
-    // an unplaced rail is not.
-    let index = match rail.cursor_position() {
-        Ok(cursor) => monitor_containing(&monitors, (cursor.x as i32, cursor.y as i32))
-            .unwrap_or_else(|| {
-                warn_once(&format!(
-                    "cursor ({}, {}) is off every monitor, using primary",
-                    cursor.x, cursor.y
-                ));
-                primary_index(&monitors)
-            }),
+    // space between screens of different heights, `target_index` falls back to
+    // the primary monitor rather than giving up — a rail on the wrong screen is
+    // recoverable, an unplaced rail is not. A pin skips the question entirely.
+    let cursor = match rail.cursor_position() {
+        Ok(cursor) => Some((cursor.x as i32, cursor.y as i32)),
         Err(e) => {
-            warn_once(&format!("cursor_position failed ({e}), using primary monitor"));
-            primary_index(&monitors)
+            if pinned.is_none() {
+                warn_once(&format!("cursor_position failed ({e}), using primary monitor"));
+            }
+            None
         }
     };
+    let index = target_index(&monitors, pinned, cursor);
 
     let (x, y) = anchored_position(monitors[index], anchor, size, offset);
 
@@ -237,10 +234,53 @@ pub fn place_rail(
     width: u32,
     height: u32,
     offset: i32,
+    monitor: Option<usize>,
 ) -> Result<(), String> {
     let anchor = Anchor::from_str_id(&anchor).ok_or_else(|| format!("unknown anchor: {anchor}"))?;
     let Some(rail) = app.get_webview_window(RAIL_LABEL) else {
         return Ok(());
     };
-    position_rail(&app, &rail, anchor, (width, height), offset)
+    position_rail(&app, &rail, anchor, (width, height), offset, monitor)
+}
+
+/// One screen, as the settings pane needs to describe it.
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MonitorInfo {
+    pub index: usize,
+    pub name: Option<String>,
+    pub width: u32,
+    pub height: u32,
+    pub x: i32,
+    pub y: i32,
+    pub primary: bool,
+}
+
+/// The monitors the rail can be pinned to, in enumeration order.
+///
+/// The index is the contract: it is what `place_rail` takes, and it is only
+/// meaningful for as long as the display arrangement holds. An out-of-range pin
+/// is ignored rather than fatal for exactly that reason.
+#[tauri::command]
+pub fn list_monitors(app: AppHandle) -> Result<Vec<MonitorInfo>, String> {
+    let Some(rail) = app.get_webview_window(RAIL_LABEL) else {
+        return Ok(Vec::new());
+    };
+    let monitors = rail.available_monitors().map_err(|e| e.to_string())?;
+    let rects = monitor_rects(&app)?;
+    let primary = primary_index(&rects);
+
+    Ok(monitors
+        .iter()
+        .enumerate()
+        .map(|(index, m)| MonitorInfo {
+            index,
+            name: m.name().cloned(),
+            width: m.size().width,
+            height: m.size().height,
+            x: m.position().x,
+            y: m.position().y,
+            primary: index == primary,
+        })
+        .collect())
 }

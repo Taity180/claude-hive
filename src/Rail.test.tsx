@@ -317,4 +317,28 @@ describe("Rail", () => {
     expect(invokeMock.mock.calls.filter((c) => c[0] === "place_rail")).toHaveLength(0);
   });
 
+
+  it("stops following the cursor while pinned to a screen", async () => {
+    // A pin is the user saying which screen; polling the cursor would only
+    // re-place the rail where it already is.
+    vi.useFakeTimers();
+    try {
+      useRailStore.setState({ open: true, followCursor: true, pinnedMonitor: 1 });
+      render(<Rail />);
+      await act(async () => {
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      const placed = invokeMock.mock.calls.filter((c) => c[0] === "place_rail");
+      expect(placed.length, "placed once for the pin").toBeGreaterThan(0);
+      expect(placed[placed.length - 1][1]).toMatchObject({ monitor: 1 });
+
+      invokeMock.mockClear();
+      act(() => vi.advanceTimersByTime(600));
+      expect(invokeMock.mock.calls.filter((c) => c[0] === "place_rail")).toHaveLength(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

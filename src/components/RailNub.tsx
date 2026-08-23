@@ -46,12 +46,23 @@ export function RailNub({ onOpen }: { onOpen: () => void }) {
   // Nothing connected, nothing posted and nothing to do: show the mark rather
   // than an empty bar, so a resting rail still looks like a thing that works.
   const isIdle = present.length === 0 && !hasAgentActivity && openTasks === 0;
+
+  // "Idle" for dimming is a different question: not "is there anything here" but
+  // "does any of it need you". Keyed on existence, a single undated task kept
+  // the rail lit forever, which made the setting untestable and useless.
+  const overdueTasks = tasks.filter(
+    (t) => !t.done && t.due !== null && new Date(t.due).getTime() < Date.now()
+  ).length;
+  const needsUser =
+    sessions.some((s) => s.status === "waiting_for_input" || s.status === "error") ||
+    unreadCount > 0 ||
+    overdueTasks > 0;
   const isSliver = restingForm === "sliver";
   const dotSize = isSliver ? 5 : 7;
 
   // Dimmed, not hidden. A rail that vanishes entirely is one the user cannot
   // find again without going back to the Hive window.
-  const dimmed = hideWhenIdle && isIdle;
+  const dimmed = hideWhenIdle && !needsUser;
   // The rail is the same strip on any edge, just lying down on a horizontal
   // one — so its contents run along the edge rather than across it.
   const horizontal = isHorizontalAnchor(anchor);

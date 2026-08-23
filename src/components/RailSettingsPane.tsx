@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { useEffect, useState } from "react";
 import { useHubStore } from "../stores/hubStore";
 import { sizeKey, useRailStore, type AnchorId } from "../stores/railStore";
 import { AppIcon } from "./AppIcon";
@@ -147,6 +148,27 @@ function Segmented<T extends string>({
   );
 }
 
+interface MonitorInfo {
+  index: number;
+  name: string | null;
+  width: number;
+  height: number;
+  x: number;
+  y: number;
+  primary: boolean;
+}
+
+/**
+ * How a screen is named in the picker.
+ *
+ * The OS name is unreadable on Windows (a `DISPLAY1` device path), so the resolution
+ * does the identifying and "primary" disambiguates two identical panels.
+ */
+function monitorLabel(m: MonitorInfo): string {
+  const size = `${m.width}×${m.height}`;
+  return m.primary ? `Screen ${m.index + 1} — ${size}, primary` : `Screen ${m.index + 1} — ${size}`;
+}
+
 export function RailSettingsPane() {
   const anchor = useRailStore((s) => s.anchor);
   const offset = useRailStore((s) => s.offset);
@@ -157,6 +179,7 @@ export function RailSettingsPane() {
   const combined = useRailStore((s) => s.combined);
   const sizes = useRailStore((s) => s.sizes);
   const mutedApps = useRailStore((s) => s.mutedApps);
+  const pinnedMonitor = useRailStore((s) => s.pinnedMonitor);
 
   const setAnchor = useRailStore((s) => s.setAnchor);
   const setOffset = useRailStore((s) => s.setOffset);
@@ -167,6 +190,20 @@ export function RailSettingsPane() {
   const setCombined = useRailStore((s) => s.setCombined);
   const forgetSizeForAnchor = useRailStore((s) => s.forgetSizeForAnchor);
   const toggleAppMuted = useRailStore((s) => s.toggleAppMuted);
+  const setPinnedMonitor = useRailStore((s) => s.setPinnedMonitor);
+
+  // Asked for once on mount. Hot-plugging a monitor mid-session is rare enough
+  // that reopening the pane to see it is a fair trade for not polling the OS.
+  const [monitors, setMonitors] = useState<MonitorInfo[]>([]);
+  useEffect(() => {
+    void invoke<MonitorInfo[]>("list_monitors")
+      .then(setMonitors)
+      .catch((err) => {
+        // Not under Tauri, or no rail window yet: the picker just stays empty
+        // and the rail keeps following the cursor.
+        console.error("[hive] list_monitors failed:", err);
+      });
+  }, []);
 
   const agentApps = useHubStore((s) => s.agentApps);
   // Mode-keyed: the size shown must be the one this mode will actually use.
@@ -311,7 +348,8 @@ export function RailSettingsPane() {
               // re-triggered itself through the resize the OS reports back — so
               // the one case that does need a fresh placement asks for it.
               const [width, height] = useRailStore.getState().currentSize();
-              void invoke("place_rail", { anchor, width, height, offset }).catch((err) => {
+              const { pinnedMonitor: monitor } = useRailStore.getState();
+              void invoke("place_rail", { anchor, width, height, offset, monitor }).catch((err) => {
                 console.error("[hive] place_rail failed:", err);
               });
             }}
@@ -361,9 +399,42 @@ export function RailSettingsPane() {
         <Row>
           <Label
             title="Follow my cursor"
-            hint="Moves to whichever monitor the cursor is on."
+            hint={
+              pinnedMonitor === null
+                ? "Moves to whichever monitor the cursor is on."
+                : "Overridden while the rail is pinned to a screen."
+            }
           />
           <Switch label="Follow my cursor" on={followCursor} onChange={setFollowCursor} />
+        </Row>
+
+        <Row>
+          <Label
+            title="Pin to a screen"
+            hint="Keeps the rail on one monitor instead of following the cursor."
+          />
+          <select
+            data-testid="pinned-monitor"
+            aria-label="Pin to a screen"
+            value={pinnedMonitor === null ? "" : String(pinnedMonitor)}
+            onChange={(e) =>
+              setPinnedMonitor(e.target.value === "" ? null : Number(e.target.value))
+            }
+            className="shrink-0 text-[11px] rounded px-1.5 py-0.5"
+            style={{
+              background: "var(--hub-surface)",
+              border: 0,
+              color: "var(--hub-text)",
+              cursor: "pointer",
+            }}
+          >
+            <option value="">Follow the cursor</option>
+            {monitors.map((m) => (
+              <option key={m.index} value={m.index}>
+                {monitorLabel(m)}
+              </option>
+            ))}
+          </select>
         </Row>
 
         <Row>

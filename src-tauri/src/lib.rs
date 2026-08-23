@@ -325,7 +325,8 @@ pub fn run() {
                     update_tray_badge,
                     rail::window::open_rail,
                     rail::window::close_rail,
-                    rail::window::place_rail
+                    rail::window::place_rail,
+                    rail::window::list_monitors
                 ])
                 .run(tauri::generate_context!())
                 .expect("error while running tauri application");

@@ -40,6 +40,7 @@ export function Rail() {
   const restingForm = useRailStore((s) => s.restingForm);
   const followCursor = useRailStore((s) => s.followCursor);
   const openOn = useRailStore((s) => s.openOn);
+  const pinnedMonitor = useRailStore((s) => s.pinnedMonitor);
   const currentSize = useRailStore((s) => s.currentSize);
   const sizes = useRailStore((s) => s.sizes);
   const combined = useRailStore((s) => s.combined);
@@ -90,11 +91,13 @@ export function Rail() {
   useEffect(() => {
     if (!onScreen) return;
     const [width, height] = open ? currentSize() : nubSize(anchor, restingForm);
-    invoke("place_rail", { anchor, width, height, offset }).catch((err) => {
-      console.error("[hive] place_rail failed:", err);
-    });
+    invoke("place_rail", { anchor, width, height, offset, monitor: pinnedMonitor }).catch(
+      (err) => {
+        console.error("[hive] place_rail failed:", err);
+      }
+    );
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [onScreen, open, combined, anchor, offset, restingForm]);
+  }, [onScreen, open, combined, anchor, offset, restingForm, pinnedMonitor]);
 
   // Combined mode moves Hive *into the rail*, so the rail becomes the only
   // window: it has to be showing and open, not stepping aside.
@@ -117,12 +120,15 @@ export function Rail() {
   // An open panel used to be excluded, and then followed anyway through the
   // placement loop described above — behaviour worth having, arrived at by
   // accident. This is that behaviour, on purpose.
-  const canFollow = !pointerInside;
+  //
+  // A pin makes the question moot: the rail stays on the screen the user chose,
+  // so polling the cursor would only re-place it where it already is.
+  const canFollow = !pointerInside && pinnedMonitor === null;
   useEffect(() => {
     if (!onScreen || !followCursor || !canFollow) return;
     const [width, height] = open ? currentSize() : nubSize(anchor, restingForm);
     const id = window.setInterval(() => {
-      invoke("place_rail", { anchor, width, height, offset }).catch(() => {
+      invoke("place_rail", { anchor, width, height, offset, monitor: null }).catch(() => {
         // A transient failure during a display change should not kill the
         // interval; place_rail's own failures are logged by the effect above.
       });

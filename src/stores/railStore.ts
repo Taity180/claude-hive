@@ -88,6 +88,14 @@ interface Persisted {
   /** Panes live inside the Hive window instead of the rail's own. */
   combined: boolean;
   /**
+   * Monitor index the rail is pinned to, or null to follow the cursor.
+   *
+   * An index rather than a name: it is what `place_rail` takes, and a display
+   * arrangement that changes invalidates either. Rust ignores an out-of-range
+   * pin rather than refusing to place the window.
+   */
+  pinnedMonitor: number | null;
+  /**
    * App slugs demoted out of the merged feed. Per app rather than per agent, so
    * a noisy Gmail can be quieted without silencing the agent reporting it.
    */
@@ -104,6 +112,7 @@ const DEFAULTS: Persisted = {
   openOn: "click",
   hideWhenIdle: false,
   combined: false,
+  pinnedMonitor: null,
   mutedApps: [],
 };
 
@@ -132,6 +141,7 @@ interface RailState extends Persisted {
   setOpenOn: (openOn: OpenOn) => void;
   setHideWhenIdle: (hide: boolean) => void;
   setCombined: (combined: boolean) => void;
+  setPinnedMonitor: (index: number | null) => void;
   toggleAppMuted: (appId: string) => void;
   isAppMuted: (appId: string) => boolean;
   applyRemoteSettings: (patch: Partial<Persisted>) => void;
@@ -148,6 +158,7 @@ export const useRailStore = create<RailState>((set, get) => {
       openOn,
       hideWhenIdle,
       combined,
+      pinnedMonitor,
       mutedApps,
     } = get();
     try {
@@ -162,6 +173,7 @@ export const useRailStore = create<RailState>((set, get) => {
           openOn,
           hideWhenIdle,
           combined,
+          pinnedMonitor,
           mutedApps,
         })
       );
@@ -215,6 +227,11 @@ export const useRailStore = create<RailState>((set, get) => {
       set({ openOn });
       persist();
       broadcastRailSettings({ openOn });
+    },
+    setPinnedMonitor: (pinnedMonitor) => {
+      set({ pinnedMonitor });
+      persist();
+      broadcastRailSettings({ pinnedMonitor });
     },
     setHideWhenIdle: (hideWhenIdle) => {
       set({ hideWhenIdle });

@@ -1,12 +1,23 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const { invoke } = vi.hoisted(() => ({ invoke: vi.fn() }));
+vi.mock("@tauri-apps/api/core", () => ({ invoke }));
+
+const monitors = [
+  { index: 0, name: null, width: 2560, height: 1440, x: 0, y: 0, primary: true },
+  { index: 1, name: null, width: 1920, height: 1080, x: 2560, y: 0, primary: false },
+];
 import { RailSettingsPane } from "./RailSettingsPane";
 import { useRailStore } from "../stores/railStore";
 import { useHubStore } from "../stores/hubStore";
 
 describe("RailSettingsPane", () => {
   beforeEach(() => {
+    invoke.mockReset().mockImplementation((cmd: string) =>
+      cmd === "list_monitors" ? Promise.resolve(monitors) : Promise.resolve(undefined)
+    );
     localStorage.clear();
     useRailStore.setState(useRailStore.getInitialState(), true);
     useHubStore.setState({ agentApps: [] });
@@ -110,5 +121,49 @@ describe("RailSettingsPane", () => {
     useRailStore.setState({ mutedApps: ["ghost"] });
     render(<RailSettingsPane />);
     expect(screen.getByRole("button", { name: /unmute ghost/i })).toBeInTheDocument();
+  });
+
+  it("lists the screens the rail can be pinned to", async () => {
+    render(<RailSettingsPane />);
+    await waitFor(() => expect(screen.getByTestId("pinned-monitor")).toBeInTheDocument());
+    const picker = screen.getByTestId("pinned-monitor") as HTMLSelectElement;
+    await waitFor(() => expect(picker.options.length).toBe(3));
+    // Following the cursor is the first option, so it stays the default.
+    expect(picker.options[0].value).toBe("");
+    expect(picker.options[1].textContent).toMatch(/Screen 1.*primary/);
+  });
+
+  it("pins the rail to a screen", async () => {
+    render(<RailSettingsPane />);
+    await waitFor(() =>
+      expect((screen.getByTestId("pinned-monitor") as HTMLSelectElement).options.length).toBe(3)
+    );
+    await userEvent.selectOptions(screen.getByTestId("pinned-monitor"), "1");
+    expect(useRailStore.getState().pinnedMonitor).toBe(1);
+  });
+
+  it("goes back to following the cursor", async () => {
+    useRailStore.setState({ pinnedMonitor: 1 });
+    render(<RailSettingsPane />);
+    await waitFor(() =>
+      expect((screen.getByTestId("pinned-monitor") as HTMLSelectElement).options.length).toBe(3)
+    );
+    await userEvent.selectOptions(screen.getByTestId("pinned-monitor"), "");
+    expect(useRailStore.getState().pinnedMonitor).toBeNull();
+  });
+
+  it("says follow-my-cursor is overridden while pinned", async () => {
+    useRailStore.setState({ pinnedMonitor: 0 });
+    render(<RailSettingsPane />);
+    expect(screen.getByText(/Overridden while the rail is pinned/)).toBeInTheDocument();
+  });
+
+  it("survives having no monitor list", async () => {
+    // Not under Tauri, or the rail window is not up yet.
+    invoke.mockRejectedValue(new Error("no ipc"));
+    render(<RailSettingsPane />);
+    await waitFor(() =>
+      expect((screen.getByTestId("pinned-monitor") as HTMLSelectElement).options.length).toBe(1)
+    );
   });
 });

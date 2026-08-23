@@ -12,6 +12,25 @@ const sessions = [
   { id: "c", projectName: "three", status: "running", lastActivity: "" },
 ] as Session[];
 
+function makeTask(overrides: Record<string, unknown>) {
+  return {
+    id: "t",
+    externalId: null,
+    agentId: null,
+    title: "a",
+    appId: null,
+    sourceLabel: null,
+    due: null,
+    done: false,
+    completedBy: null,
+    completedAt: null,
+    notes: [],
+    createdAt: "",
+    updatedAt: "",
+    ...overrides,
+  } as never;
+}
+
 describe("RailNub", () => {
   beforeEach(() => {
     useHubStore.setState({ sessions, unreadSessions: new Set(["a", "b"]), agentPosts: [], tasks: [] });
@@ -178,15 +197,62 @@ describe("RailNub", () => {
     expect(screen.getByTestId("rail-nub")).toHaveAttribute("data-dimmed", "true");
   });
 
-  it("stays solid when something needs the user, even with hide-when-idle on", () => {
+  it("still dims with tasks outstanding but nothing due", () => {
+    // Keyed on "is there anything here", one undated task kept the rail lit
+    // forever and the setting could never be seen to do anything.
     useRailStore.setState({ hideWhenIdle: true });
     useHubStore.setState({
       sessions: [],
       unreadSessions: new Set(),
       agentPosts: [],
-      tasks: [
-        { id: "t1", externalId: null, agentId: null, title: "a", appId: null, sourceLabel: null, due: null, done: false, completedBy: null, completedAt: null, notes: [], createdAt: "", updatedAt: "" },
-      ],
+      tasks: [makeTask({ id: "t1" })],
+    });
+    render(<RailNub onOpen={vi.fn()} />);
+    expect(screen.getByTestId("rail-nub")).toHaveAttribute("data-dimmed", "true");
+  });
+
+  it("stays solid for an overdue task", () => {
+    useRailStore.setState({ hideWhenIdle: true });
+    useHubStore.setState({
+      sessions: [],
+      unreadSessions: new Set(),
+      agentPosts: [],
+      tasks: [makeTask({ id: "t1", due: "2020-01-01T00:00:00Z" })],
+    });
+    render(<RailNub onOpen={vi.fn()} />);
+    expect(screen.getByTestId("rail-nub")).not.toHaveAttribute("data-dimmed");
+  });
+
+  it("stays solid for a session waiting on the user", () => {
+    useRailStore.setState({ hideWhenIdle: true });
+    useHubStore.setState({
+      sessions: [{ id: "s1", status: "waiting_for_input" }] as never,
+      unreadSessions: new Set(),
+      agentPosts: [],
+      tasks: [],
+    });
+    render(<RailNub onOpen={vi.fn()} />);
+    expect(screen.getByTestId("rail-nub")).not.toHaveAttribute("data-dimmed");
+  });
+
+  it("stays solid for an unread agent post", () => {
+    useRailStore.setState({ hideWhenIdle: true });
+    useHubStore.setState({
+      sessions: [],
+      unreadSessions: new Set(),
+      agentPosts: [
+        {
+          id: "p1",
+          agentId: "a1",
+          agentName: "Grok",
+          appId: null,
+          content: "hi",
+          postType: "info",
+          timestamp: "",
+          read: false,
+        },
+      ] as never,
+      tasks: [],
     });
     render(<RailNub onOpen={vi.fn()} />);
     expect(screen.getByTestId("rail-nub")).not.toHaveAttribute("data-dimmed");

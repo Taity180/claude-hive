@@ -27,6 +27,7 @@ export interface RailSettingsPatch {
   openOn?: OpenOn;
   hideWhenIdle?: boolean;
   combined?: boolean;
+  pinnedMonitor?: number | null;
   mutedApps?: string[];
 }
 

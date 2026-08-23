@@ -84,6 +84,27 @@ pub fn monitor_containing(monitors: &[MonitorRect], cursor: (i32, i32)) -> Optio
     })
 }
 
+/// Which monitor the rail belongs on.
+///
+/// A pin wins outright: the user asked for that screen, so a cursor on another
+/// one is not a reason to move. An out-of-range pin is ignored rather than an
+/// error — monitors get unplugged, and a rail that refuses to place itself is
+/// worse than one on the wrong screen.
+pub fn target_index(
+    monitors: &[MonitorRect],
+    pinned: Option<usize>,
+    cursor: Option<(i32, i32)>,
+) -> usize {
+    if let Some(index) = pinned {
+        if index < monitors.len() {
+            return index;
+        }
+    }
+    cursor
+        .and_then(|c| monitor_containing(monitors, c))
+        .unwrap_or_else(|| primary_index(monitors))
+}
+
 /// Index of the primary monitor. Windows always places the primary display at
 /// the desktop origin, and every other monitor is offset from it — which is why
 /// a multi-monitor setup reports negative coordinates for screens to the left.
@@ -247,5 +268,37 @@ mod tests {
         let (x, y) = anchored_position(m[1], Anchor::Right, (32, 140), 8);
         assert_eq!(x, -3840 + 1920 - 32 - 8);
         assert_eq!(y, 149 + (1080 - 140) / 2);
+    }
+
+    #[test]
+    fn a_pin_beats_the_cursor() {
+        let monitors = four_screens();
+        // Cursor on the primary, pinned to the far-left screen.
+        assert_eq!(target_index(&monitors, Some(0), Some((100, 100))), 0);
+        assert_eq!(target_index(&monitors, Some(3), Some((100, 100))), 3);
+    }
+
+    #[test]
+    fn an_out_of_range_pin_falls_back_to_the_cursor() {
+        // A monitor can be unplugged between the pin being saved and used.
+        let monitors = four_screens();
+        let on_primary = target_index(&monitors, None, Some((100, 100)));
+        assert_eq!(target_index(&monitors, Some(99), Some((100, 100))), on_primary);
+    }
+
+    #[test]
+    fn with_no_pin_and_no_cursor_it_uses_primary() {
+        let monitors = four_screens();
+        assert_eq!(
+            target_index(&monitors, None, None),
+            primary_index(&monitors)
+        );
+    }
+
+    #[test]
+    fn with_no_pin_it_follows_the_cursor() {
+        let monitors = four_screens();
+        let cursor = (monitors[1].x + 10, monitors[1].y + 10);
+        assert_eq!(target_index(&monitors, None, Some(cursor)), 1);
     }
 }
