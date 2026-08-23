@@ -11,6 +11,8 @@ import { PlanUsageChip } from "./components/PlanUsage";
 import { SessionDetail } from "./components/SessionDetail";
 import { Settings } from "./components/Settings";
 import { RailButton } from "./components/RailButton";
+import { CombinedPanes } from "./components/CombinedPanes";
+import { useRailStore } from "./stores/railStore";
 
 // Vertical padding contributed by the scroll wrapper (`p-1` → 4px top + 4px bottom).
 // Kept in one place so the sizing math stays in sync with the JSX below.
@@ -45,6 +47,8 @@ function WindowBar({ barRef, captureExpandedHeight }: WindowBarProps) {
   const sessions = useHubStore((s) => s.sessions);
   const usagePanelOpen = useHubStore((s) => s.usagePanelOpen);
   const setUsagePanelOpen = useHubStore((s) => s.setUsagePanelOpen);
+  const combinedInBar = useRailStore((s) => s.combined);
+  const setCombinedInBar = useRailStore((s) => s.setCombined);
 
   const handleMinimize = () => {
     void invokeCommand("minimize_window");
@@ -190,7 +194,24 @@ function WindowBar({ barRef, captureExpandedHeight }: WindowBarProps) {
         </button>
       )}
 
-      <RailButton />
+      {combinedInBar ? (
+        <button
+          type="button"
+          onClick={() => setCombinedInBar(false)}
+          className="text-[10px] px-1.5 py-0.5 rounded transition-opacity hover:opacity-80"
+          style={{
+            background: "var(--hub-surface)",
+            color: "var(--hub-text-muted)",
+            border: 0,
+            cursor: "pointer",
+          }}
+          title="Give the rail its own window again"
+        >
+          Detach rail
+        </button>
+      ) : (
+        <RailButton />
+      )}
 
       {/* Window controls */}
       <div className="flex items-center gap-0.5 ml-1">
@@ -227,6 +248,7 @@ function App() {
   const expandedHeight = useHubStore((s) => s.expandedHeight);
   const setExpandedHeight = useHubStore((s) => s.setExpandedHeight);
   const usagePanelHeight = useHubStore((s) => s.usagePanelHeight);
+  const combined = useRailStore((s) => s.combined);
 
   const windowBarRef = useRef<HTMLDivElement>(null);
   const collapsedContentRef = useRef<HTMLDivElement>(null);
@@ -253,7 +275,7 @@ function App() {
   // a ResizeObserver so the window also tightens up when pills wrap onto a
   // different number of rows (width change, new session, etc).
   useEffect(() => {
-    if (viewState !== "collapsed") return;
+    if (combined || viewState !== "collapsed") return;
     const bar = windowBarRef.current;
     const content = collapsedContentRef.current;
     if (!bar || !content) return;
@@ -279,16 +301,18 @@ function App() {
       cancelled = true;
       observer.disconnect();
     };
-  }, [viewState, sessions.length, usagePanelHeight]);
+  }, [combined, viewState, sessions.length, usagePanelHeight]);
 
   // Whenever we're in a "big" view (expanded, session-detail, settings),
   // restore the user's last remembered expanded height. This means clicking
   // a session pill from collapsed mode auto-grows the window to fit the
   // message feed, rather than keeping the tiny collapsed height.
   useEffect(() => {
-    if (viewState === "collapsed") return;
+    // Combined mode hosts four panes, so it always wants the expanded height
+    // even while viewState still says collapsed.
+    if (!combined && viewState === "collapsed") return;
     void invokeCommand("resize_preserving_width", { height: expandedHeight });
-  }, [viewState, expandedHeight]);
+  }, [combined, viewState, expandedHeight]);
 
   return (
     <div
@@ -297,10 +321,11 @@ function App() {
     >
       <WindowBar barRef={windowBarRef} captureExpandedHeight={captureExpandedHeight} />
       <div className="flex-1 overflow-auto p-1">
-        {viewState === "collapsed" && <CollapsedBar ref={collapsedContentRef} />}
-        {viewState === "expanded" && <ExpandedDashboard />}
-        {viewState === "session-detail" && <SessionDetail />}
-        {viewState === "settings" && <Settings />}
+        {combined && <CombinedPanes />}
+        {!combined && viewState === "collapsed" && <CollapsedBar ref={collapsedContentRef} />}
+        {!combined && viewState === "expanded" && <ExpandedDashboard />}
+        {!combined && viewState === "session-detail" && <SessionDetail />}
+        {!combined && viewState === "settings" && <Settings />}
       </div>
     </div>
   );

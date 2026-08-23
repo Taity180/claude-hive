@@ -9,6 +9,7 @@ import { RailPanel } from "./components/RailPanel";
 import { AgentsPane } from "./components/AgentsPane";
 import { TasksPane } from "./components/TasksPane";
 import { RailChrome } from "./components/RailChrome";
+import { RailSettingsPane } from "./components/RailSettingsPane";
 import { useAgentData } from "./hooks/useAgentData";
 import { useRailResize } from "./hooks/useRailResize";
 
@@ -32,11 +33,12 @@ export function Rail() {
   const followCursor = useRailStore((s) => s.followCursor);
   const currentSize = useRailStore((s) => s.currentSize);
   const sizes = useRailStore((s) => s.sizes);
+  const combined = useRailStore((s) => s.combined);
 
   // The rail window is created hidden at startup, so this component mounts long
   // before it is on screen. Rust tells us when that changes; without it the
   // cursor-follow poll below would run all day against a hidden window.
-  const [pane, setPane] = useState<"feed" | "tasks" | "agents">("feed");
+  const [pane, setPane] = useState<"feed" | "tasks" | "agents" | "settings">("feed");
   // Which edge the panel grows from, so the slide-in runs the right way.
   const anchorSide = anchor === "left" || anchor === "tl" || anchor === "bl" ? "left" : "right";
   const [onScreen, setOnScreen] = useState(false);
@@ -63,19 +65,28 @@ export function Rail() {
   // Resize and reposition whenever the shape changes. `sizes` is in the deps
   // so a per-anchor resize takes effect without waiting for another trigger.
   useEffect(() => {
-    if (!onScreen) return;
+    if (!onScreen || combined) return;
     const [width, height] = open ? currentSize() : NUB_SIZE[restingForm];
     invoke("place_rail", { anchor, width, height, offset }).catch((err) => {
       console.error("[hive] place_rail failed:", err);
     });
   }, [onScreen, open, anchor, offset, restingForm, sizes, currentSize]);
 
+  // Two copies of the same pane on screen is worse than either alone, so the
+  // rail window steps aside while its panes live inside Hive.
+  useEffect(() => {
+    if (!combined) return;
+    invoke("close_rail").catch((err) => {
+      console.error("[hive] close_rail failed:", err);
+    });
+  }, [combined]);
+
   // Cursor-follow. Polling is the only option — there is no cursor-crossed-
   // monitor event — but 250ms is well below the point where the movement reads
   // as laggy, and it is skipped while the rail is open so the window never
   // yanks out from under a click.
   useEffect(() => {
-    if (!onScreen || !followCursor || open) return;
+    if (!onScreen || combined || !followCursor || open) return;
     const [width, height] = NUB_SIZE[restingForm];
     const id = window.setInterval(() => {
       invoke("place_rail", { anchor, width, height, offset }).catch(() => {
@@ -84,7 +95,7 @@ export function Rail() {
       });
     }, 250);
     return () => window.clearInterval(id);
-  }, [onScreen, followCursor, open, anchor, offset, restingForm]);
+  }, [onScreen, combined, followCursor, open, anchor, offset, restingForm]);
 
   return (
     <div
@@ -102,7 +113,7 @@ export function Rail() {
             role="group"
             aria-label="Rail pane"
           >
-            {(["feed", "tasks", "agents"] as const).map((id) => (
+            {(["feed", "tasks", "agents", "settings"] as const).map((id) => (
               <button
                 key={id}
                 type="button"
@@ -118,13 +129,21 @@ export function Rail() {
                   color: pane === id ? "var(--hub-text)" : "var(--hub-text-muted)",
                 }}
               >
-                {id === "feed" ? "Activity" : id === "tasks" ? "Tasks" : "Agents"}
+                {id === "feed" ? "Activity" : id === "tasks" ? "Tasks" : id === "agents" ? "Agents" : "Settings"}
               </button>
             ))}
             <span className="flex-1" />
             <RailChrome onCollapse={() => setOpen(false)} />
           </div>
-          {pane === "feed" ? <RailPanel /> : pane === "tasks" ? <TasksPane /> : <AgentsPane />}
+          {pane === "feed" ? (
+            <RailPanel />
+          ) : pane === "tasks" ? (
+            <TasksPane />
+          ) : pane === "agents" ? (
+            <AgentsPane />
+          ) : (
+            <RailSettingsPane />
+          )}
         </div>
       ) : (
         <RailNub onOpen={() => setOpen(true)} />
