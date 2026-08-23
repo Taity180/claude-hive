@@ -41,6 +41,8 @@ describe("CombinedPanes", () => {
     localStorage.clear();
     useRailStore.setState(useRailStore.getInitialState(), true);
     useHubStore.setState({
+      viewState: "expanded",
+      activeSessionId: null,
       sessions: [],
       agentApps: [],
       agentPosts: [],
@@ -50,9 +52,28 @@ describe("CombinedPanes", () => {
     });
   });
 
+  it("groups the sidebar into what Hive brings and what the rail does", () => {
+    render(<CombinedPanes />);
+    expect(screen.getByText("Hive")).toBeInTheDocument();
+    expect(screen.getByText("Rail")).toBeInTheDocument();
+  });
+
+  it("keeps the connector strip above every pane, not just the feed", async () => {
+    useHubStore.setState({
+      agentApps: [
+        { agentId: "a1", agentName: "Grok Bot", id: "gmail", label: "Gmail", health: "ok" },
+      ] as never,
+    });
+    render(<CombinedPanes />);
+    // Sessions is the pane on open, and the strip has to be there too.
+    expect(screen.getByTitle(/Gmail/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: /^Tasks/ }));
+    expect(screen.getByTitle(/Gmail/)).toBeInTheDocument();
+  });
+
   it("shows a sidebar entry per pane", () => {
     render(<CombinedPanes />);
-    for (const label of ["Sessions", "Activity", "Tasks", "Agents", "Settings"]) {
+    for (const label of ["Sessions", "All activity", "Tasks", "Agents", "Settings"]) {
       expect(screen.getByRole("button", { name: new RegExp(`^${label}`) })).toBeInTheDocument();
     }
   });
@@ -85,21 +106,23 @@ describe("CombinedPanes", () => {
     expect(screen.getByTestId("sidebar-count-sessions")).toHaveTextContent("1");
   });
 
-  it("detaching gives Hive its own window back", async () => {
-    useRailStore.getState().setCombined(true);
-    render(<CombinedPanes />);
-    await userEvent.click(screen.getByTestId("detach-hive"));
-    expect(useRailStore.getState().combined).toBe(false);
-    // The rail cannot show Hive through its own window handle, so this has to
-    // go through the app handle in Rust.
-    expect(invoke).toHaveBeenCalledWith("show_main_window");
-  });
-
   it("marks the active pane", () => {
     render(<CombinedPanes />);
     const pressed = screen
       .getAllByTestId("sidebar-item")
       .filter((b) => b.getAttribute("aria-pressed") === "true");
     expect(pressed).toHaveLength(1);
+  });
+
+  it("follows Hive's own navigation instead of leaving a dead click", async () => {
+    // The dashboard's rows set viewState; if the pane only ever rendered the
+    // dashboard, clicking a session would change state and show nothing.
+    useHubStore.setState({ viewState: "settings" });
+    render(<CombinedPanes />);
+    expect(screen.getByTestId("hive-pane-back")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByTestId("hive-pane-back"));
+    expect(useHubStore.getState().viewState).toBe("expanded");
+    expect(screen.queryByTestId("hive-pane-back")).toBeNull();
   });
 });

@@ -1,22 +1,82 @@
 import { useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
 import { useHubStore } from "../stores/hubStore";
 import { RailPanel } from "./RailPanel";
 import { TasksPane } from "./TasksPane";
 import { AgentsPane } from "./AgentsPane";
 import { RailSettingsPane } from "./RailSettingsPane";
 import { ExpandedDashboard } from "./ExpandedDashboard";
-import { useRailStore } from "../stores/railStore";
+import { SessionDetail } from "./SessionDetail";
+import { Settings } from "./Settings";
+import { ConnectedAppsBar } from "./ConnectedAppsBar";
 
 type PaneId = "sessions" | "activity" | "tasks" | "agents" | "settings";
 
-const PANES: { id: PaneId; label: string; icon: string }[] = [
-  { id: "sessions", label: "Sessions", icon: "◫" },
-  { id: "activity", label: "Activity", icon: "≡" },
-  { id: "tasks", label: "Tasks", icon: "✓" },
-  { id: "agents", label: "Agents", icon: "◇" },
-  { id: "settings", label: "Settings", icon: "⚙" },
+/** Grouped the way the design has it: what Hive brings, then what the rail does. */
+const GROUPS: { group: string; items: { id: PaneId; label: string; icon: string }[] }[] = [
+  {
+    group: "Hive",
+    items: [{ id: "sessions", label: "Sessions", icon: "◫" }],
+  },
+  {
+    group: "Rail",
+    items: [
+      { id: "activity", label: "All activity", icon: "≡" },
+      { id: "tasks", label: "Tasks", icon: "✓" },
+      { id: "agents", label: "Agents", icon: "◇" },
+      { id: "settings", label: "Settings", icon: "⚙" },
+    ],
+  },
 ];
+
+/**
+ * Hive's own pane, routed the way Hive routes it.
+ *
+ * The dashboard's session rows and its gear set `viewState` — that is how Hive
+ * navigates. Rendering only `ExpandedDashboard` here would leave both as dead
+ * clicks: the state changes and nothing on screen follows it. Hive's own title
+ * bar carries the back button, so this pane has to supply one.
+ */
+function HivePane() {
+  const viewState = useHubStore((s) => s.viewState);
+  const setViewState = useHubStore((s) => s.setViewState);
+  const setActiveSession = useHubStore((s) => s.setActiveSession);
+  const nested = viewState === "session-detail" || viewState === "settings";
+
+  return (
+    <div className="flex-1 min-h-0 flex flex-col">
+      {nested && (
+        <div className="shrink-0 px-2 pt-1.5">
+          <button
+            type="button"
+            data-testid="hive-pane-back"
+            onClick={() => {
+              setActiveSession(null);
+              setViewState("expanded");
+            }}
+            className="text-[10.5px] px-1.5 py-0.5 rounded transition-opacity hover:opacity-80"
+            style={{
+              background: "var(--hub-surface)",
+              color: "var(--hub-text-muted)",
+              border: 0,
+              cursor: "pointer",
+            }}
+          >
+            ← All sessions
+          </button>
+        </div>
+      )}
+      <div className="flex-1 min-h-0 overflow-y-auto">
+        {viewState === "session-detail" ? (
+          <SessionDetail />
+        ) : viewState === "settings" ? (
+          <Settings />
+        ) : (
+          <ExpandedDashboard />
+        )}
+      </div>
+    </div>
+  );
+}
 
 /**
  * Everything in one place, behind a sidebar.
@@ -32,11 +92,14 @@ const PANES: { id: PaneId; label: string; icon: string }[] = [
  */
 export function CombinedPanes() {
   const [pane, setPane] = useState<PaneId>("sessions");
+  // The connector strip sits above every pane here rather than inside the feed,
+  // so the connected apps stay in view whichever pane is showing. Picking one
+  // still filters the feed, so the selection has to live above both.
+  const [selectedApp, setSelectedApp] = useState<string | null>(null);
   const sessions = useHubStore((s) => s.sessions);
   const tasks = useHubStore((s) => s.tasks);
   const agents = useHubStore((s) => s.agents);
   const agentPosts = useHubStore((s) => s.agentPosts);
-  const setCombined = useRailStore((s) => s.setCombined);
 
   const counts: Partial<Record<PaneId, number>> = {
     sessions: sessions.filter(
@@ -47,82 +110,74 @@ export function CombinedPanes() {
     agents: agents.length,
   };
 
-  const detach = () => {
-    setCombined(false);
-    // Hive's window hid itself when combined mode turned on, and it cannot
-    // unhide itself from here — only Rust holds a handle to it.
-    void invoke("show_main_window").catch((err) => {
-      console.error("[hive] show_main_window failed:", err);
-    });
+  const selectApp = (appId: string | null) => {
+    setSelectedApp(appId);
+    // Filtering by an app is a request to see that app's activity, which is not
+    // what the Sessions or Tasks pane shows.
+    if (appId) setPane("activity");
   };
 
   return (
     <div className="flex h-full min-h-0">
       <div
-        className="shrink-0 flex flex-col gap-0.5 p-2"
-        style={{ width: 132, borderRight: "1px solid var(--hub-hair)" }}
+        className="shrink-0 flex flex-col gap-0.5 p-2 overflow-y-auto"
+        style={{ width: 138, borderRight: "1px solid var(--hub-hair)" }}
       >
-        {PANES.map((item) => {
-          const count = counts[item.id] ?? 0;
-          const active = pane === item.id;
-          return (
-            <button
-              key={item.id}
-              type="button"
-              data-testid="sidebar-item"
-              aria-pressed={active}
-              onClick={() => setPane(item.id)}
-              className="flex items-center gap-2 w-full text-left rounded-md px-2 py-1"
-              style={{
-                border: 0,
-                cursor: "pointer",
-                fontSize: 12.5,
-                fontWeight: active ? 600 : 500,
-                background: active ? "var(--hub-surface)" : "transparent",
-                color: active ? "var(--hub-text)" : "var(--hub-text-muted)",
-              }}
+        {GROUPS.map(({ group, items }) => (
+          <div key={group} className="flex flex-col gap-0.5">
+            <span
+              className="text-[9.5px] font-semibold uppercase tracking-wide px-2 pt-1.5 pb-0.5"
+              style={{ color: "var(--hub-text-dim)" }}
             >
-              <span aria-hidden="true" style={{ width: 14, textAlign: "center" }}>
-                {item.icon}
-              </span>
-              {item.label}
-              {count > 0 && (
-                <span
-                  data-testid={`sidebar-count-${item.id}`}
-                  className="ml-auto tabular-nums"
-                  style={{ fontSize: 10, color: "var(--hub-text-dim)" }}
+              {group}
+            </span>
+            {items.map((item) => {
+              const count = counts[item.id] ?? 0;
+              const active = pane === item.id;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  data-testid="sidebar-item"
+                  aria-pressed={active}
+                  onClick={() => setPane(item.id)}
+                  className="flex items-center gap-2 w-full text-left rounded-md px-2 py-1"
+                  style={{
+                    border: 0,
+                    cursor: "pointer",
+                    fontSize: 12.5,
+                    fontWeight: active ? 600 : 500,
+                    background: active ? "var(--hub-surface)" : "transparent",
+                    color: active ? "var(--hub-text)" : "var(--hub-text-muted)",
+                  }}
                 >
-                  {count}
-                </span>
-              )}
-            </button>
-          );
-        })}
-
-        <button
-          type="button"
-          data-testid="detach-hive"
-          onClick={detach}
-          className="mt-auto text-[10.5px] rounded-md px-2 py-1 text-left"
-          style={{
-            background: "var(--hub-surface)",
-            border: 0,
-            color: "var(--hub-text-muted)",
-            cursor: "pointer",
-          }}
-          title="Give Hive its own window again"
-        >
-          Detach Hive
-        </button>
+                  <span aria-hidden="true" style={{ width: 14, textAlign: "center" }}>
+                    {item.icon}
+                  </span>
+                  {item.label}
+                  {count > 0 && (
+                    <span
+                      data-testid={`sidebar-count-${item.id}`}
+                      className="ml-auto tabular-nums"
+                      style={{ fontSize: 10, color: "var(--hub-text-dim)" }}
+                    >
+                      {count}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        ))}
       </div>
 
       <div className="flex-1 min-w-0 flex flex-col">
-        {pane === "sessions" && (
-          <div className="flex-1 overflow-y-auto">
-            <ExpandedDashboard />
-          </div>
+        <ConnectedAppsBar selected={selectedApp} onSelect={selectApp} />
+
+        {pane === "sessions" && <HivePane />}
+        {pane === "activity" && (
+          <RailPanel embedded selectedApp={selectedApp} onSelectApp={setSelectedApp} />
         )}
-        {pane === "activity" && <RailPanel />}
         {pane === "tasks" && <TasksPane />}
         {pane === "agents" && <AgentsPane />}
         {pane === "settings" && <RailSettingsPane />}

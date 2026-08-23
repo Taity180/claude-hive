@@ -11,7 +11,11 @@ import { TasksPane } from "./components/TasksPane";
 import { RailChrome } from "./components/RailChrome";
 import { RailSettingsPane } from "./components/RailSettingsPane";
 import { CombinedPanes } from "./components/CombinedPanes";
+import { DetachHiveButton } from "./components/DetachHiveButton";
+import { PlanUsageChip } from "./components/PlanUsage";
+import { GlobalUsage } from "./components/UsageMeter";
 import { useAgentData } from "./hooks/useAgentData";
+import { useUsage } from "./hooks/useUsage";
 import { useRailResize } from "./hooks/useRailResize";
 import { useRailSettingsSync } from "./hooks/useRailSettingsSync";
 
@@ -19,6 +23,9 @@ export function Rail() {
   useTheme();
   useWebSocket();
   useAgentData();
+  // Combined mode shows Hive's usage chips in the title bar, and those numbers
+  // come from a poll rather than the socket — so the rail has to run it too.
+  useUsage();
   useRailResize();
   useRailSettingsSync();
 
@@ -101,6 +108,17 @@ export function Rail() {
     return () => window.clearInterval(id);
   }, [onScreen, combined, followCursor, open, anchor, offset, restingForm]);
 
+  // The rail is a decorationless window, so the title bar has to move it. Same
+  // handler Hive's own bar uses; buttons are excluded or dragging would eat the
+  // clicks on the chips and the detach button.
+  const startDrag = (e: React.MouseEvent) => {
+    if (e.button !== 0) return;
+    if ((e.target as HTMLElement).closest("button")) return;
+    invoke("start_dragging").catch((err) => {
+      console.error("[hive] start_dragging failed:", err);
+    });
+  };
+
   return (
     <div
       className="h-screen w-screen overflow-hidden hub-material"
@@ -116,13 +134,17 @@ export function Rail() {
         <div className="flex flex-col h-full rail-slide-in" data-anchor-side={anchorSide}>
           <div
             data-tauri-drag-region
-            className="flex items-center gap-2 px-2 py-1.5 shrink-0 select-none"
+            onMouseDown={startDrag}
+            className="flex items-center gap-2 px-2.5 py-1.5 shrink-0 select-none cursor-grab active:cursor-grabbing"
             style={{ borderBottom: "1px solid var(--hub-hair)" }}
           >
             <span className="text-[12px] font-semibold" style={{ color: "var(--hub-text)" }}>
               Hive
             </span>
             <span className="flex-1" />
+            <PlanUsageChip />
+            <GlobalUsage />
+            <DetachHiveButton />
             <RailChrome onCollapse={() => setOpen(false)} />
           </div>
           <CombinedPanes />

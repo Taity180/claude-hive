@@ -89,12 +89,25 @@ function SessionRow({ session }: { session: Session }) {
   );
 }
 
-export function RailPanel() {
+interface RailPanelProps {
+  /**
+   * Combined mode supplies the window's own title bar and a connector strip
+   * above every pane, so the panel drops its own copies of both and takes the
+   * app filter from above instead of owning it.
+   */
+  embedded?: boolean;
+  selectedApp?: string | null;
+  onSelectApp?: (appId: string | null) => void;
+}
+
+export function RailPanel({ embedded, selectedApp: controlled, onSelectApp }: RailPanelProps = {}) {
   const sessions = useHubStore((s) => s.sessions);
   const agentPosts = useHubStore((s) => s.agentPosts);
   const agents = useHubStore((s) => s.agents);
   const mutedApps = useRailStore((s) => s.mutedApps);
-  const [selectedApp, setSelectedApp] = useState<string | null>(null);
+  const [ownSelectedApp, setOwnSelectedApp] = useState<string | null>(null);
+  const selectedApp = onSelectApp ? (controlled ?? null) : ownSelectedApp;
+  const setSelectedApp = onSelectApp ?? setOwnSelectedApp;
 
   // Ordering lives in buildFeed so it can be tested without rendering.
   const rows = buildFeed(sessions, agentPosts, {
@@ -105,20 +118,24 @@ export function RailPanel() {
 
   return (
     <div className="flex flex-col h-full">
-      <div
-        data-tauri-drag-region
-        className="flex items-center gap-2 px-3 py-2 shrink-0 select-none"
-        style={{ borderBottom: "1px solid var(--hub-hair)" }}
-      >
-        <span className="text-[12px] font-semibold" style={{ color: "var(--hub-text)" }}>
-          {selectedApp ?? "Rail"}
-        </span>
-        <span className="text-[11px]" style={{ color: "var(--hub-text-muted)" }}>
-          {sessions.length} session{sessions.length === 1 ? "" : "s"}
-        </span>
-      </div>
+      {!embedded && (
+        <>
+          <div
+            data-tauri-drag-region
+            className="flex items-center gap-2 px-3 py-2 shrink-0 select-none"
+            style={{ borderBottom: "1px solid var(--hub-hair)" }}
+          >
+            <span className="text-[12px] font-semibold" style={{ color: "var(--hub-text)" }}>
+              {selectedApp ?? "Rail"}
+            </span>
+            <span className="text-[11px]" style={{ color: "var(--hub-text-muted)" }}>
+              {sessions.length} session{sessions.length === 1 ? "" : "s"}
+            </span>
+          </div>
 
-      <ConnectedAppsBar selected={selectedApp} onSelect={setSelectedApp} />
+          <ConnectedAppsBar selected={selectedApp} onSelect={setSelectedApp} />
+        </>
+      )}
 
       <div className="flex-1 overflow-y-auto p-1.5 flex flex-col gap-0.5">
         {rows.length === 0 && (

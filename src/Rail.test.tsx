@@ -68,6 +68,25 @@ describe("Rail", () => {
     expect(screen.queryByTestId("pane-feed")).toBeNull();
   });
 
+  it("carries Hive's token usage in the combined title bar", () => {
+    // The design puts it there, and the rail has to poll for it itself: usage
+    // comes from a scan of files on disk, not from the websocket.
+    const tokens = { input: 1_000_000, output: 200_000, cacheRead: 0, cacheCreation: 0 };
+    useHubStore.setState({
+      usage: {
+        sessions: [],
+        today: tokens,
+        todayConnected: tokens,
+        days: [],
+        todayCostUsd: null,
+        scannedAt: null,
+      },
+    } as never);
+    useRailStore.setState({ open: true, combined: true });
+    render(<Rail />);
+    expect(screen.getByText(/1\.2M/)).toBeInTheDocument();
+  });
+
   it("shows and opens itself when combined mode turns on", async () => {
     render(<Rail />);
     act(() => useRailStore.getState().setCombined(true));
