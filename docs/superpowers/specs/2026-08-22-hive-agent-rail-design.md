@@ -69,9 +69,15 @@ Three surfaces, two windows, one backend process.
 
 - A `Rail` button in Hive's title bar opens the Rail window.
 - Each window is hideable independently; the tray menu governs both.
-- **Combined mode** is a setting that reparents the Rail's panes into Hive behind a sidebar
-  (Sessions / All activity / Tasks / Agents / Connectors). `Detach rail` reverses it. Same pane components
-  either way.
+- **Combined mode** is a setting that brings **Hive into the Rail** behind a sidebar
+  (Sessions / Activity / Tasks / Agents / Settings). Hive's own window hides itself while it is on, and
+  `Detach Hive` in the sidebar reverses it (`show_main_window`). Same pane components either way.
+  The direction matters: the Rail is the window that is always there, edge-docked and following the cursor,
+  so it is the one worth having everything in. It was built the other way round first — panes reparented into
+  Hive, rail closed — and that reads as the toggle doing nothing, because the window you were looking at when
+  you flipped it is the one that disappears.
+- Combined mode remembers its size **separately per edge** from the plain rail (`sizeKey`): 372px is a panel
+  for four panes and a sliver for the whole of Hive.
 - Go-to-session (`navigate_to_session`, the `↗` button) appears on session rows in **all** surfaces including
   inside the Rail, so the Rail never becomes a dead end.
 
@@ -266,7 +272,7 @@ Each phase is useful on its own, and each is built **on** the previous rather th
 4. **Tasks** — the `tasks_*` tools plus Hive's first disk persistence, the Tasks pane, filters, the No-date
    group, collapsible notes, agent-completion labelling. Deliberately after ingest: it is the largest piece and
    needs phase 3's plumbing to be worth anything.
-5. **Combined mode** — reparent the panes into Hive behind the toggle. Last, because it can only combine panes
+5. **Combined mode** — bring Hive into the rail behind the toggle. Last, because it can only combine panes
    that already exist.
 
 ## Testing
@@ -318,6 +324,7 @@ Three features shipped with their logic written, tested, and unreachable:
 | `close_rail` | phase 2 | the rail could not be dismissed at all |
 | `setSizeForAnchor` | phase 2 | dragging the rail's edge did nothing |
 | `addTaskNote` | phase 4 | there was no way to write a note |
+| `broadcastRailSettings` | (absent) | flipping combined mode in one window never reached the other |
 
 Each had passing tests. Each was invisible to the test suite, because a unit
 test proves a function behaves, never that anything reaches it.
@@ -351,3 +358,10 @@ None blocking. Two worth revisiting once phase 3 is real:
   UI generalises past sessions.
 - Whether feed history should persist alongside tasks. Currently no; revisit if the Rail proves useful as a log
   rather than a glance.
+
+A third habit, from combined mode: **a setting that spans two windows needs a
+transport.** Hive and the Rail are separate WebView2 instances, so they hold
+separate Zustand stores; `localStorage` is shared but read once at module load.
+The toggle was correct, persisted, and tested, and still did nothing visible,
+because the window that had to react never learned about it. `railSync.ts` emits
+a Tauri event and both windows listen (`useRailSettingsSync`).

@@ -2,6 +2,9 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+const { invoke } = vi.hoisted(() => ({ invoke: vi.fn() }));
+vi.mock("@tauri-apps/api/core", () => ({ invoke }));
+
 vi.mock("../agentApi", () => ({
   createTask: vi.fn().mockResolvedValue(true),
   setTaskDone: vi.fn().mockResolvedValue(true),
@@ -34,6 +37,7 @@ const openTask = {
 
 describe("CombinedPanes", () => {
   beforeEach(() => {
+    invoke.mockClear().mockResolvedValue(undefined);
     localStorage.clear();
     useRailStore.setState(useRailStore.getInitialState(), true);
     useHubStore.setState({
@@ -48,7 +52,7 @@ describe("CombinedPanes", () => {
 
   it("shows a sidebar entry per pane", () => {
     render(<CombinedPanes />);
-    for (const label of ["Activity", "Tasks", "Agents", "Settings"]) {
+    for (const label of ["Sessions", "Activity", "Tasks", "Agents", "Settings"]) {
       expect(screen.getByRole("button", { name: new RegExp(`^${label}`) })).toBeInTheDocument();
     }
   });
@@ -68,6 +72,27 @@ describe("CombinedPanes", () => {
   it("shows no count when there is nothing outstanding", () => {
     render(<CombinedPanes />);
     expect(screen.queryByTestId("sidebar-count-tasks")).toBeNull();
+  });
+
+  it("counts sessions needing attention", () => {
+    useHubStore.setState({
+      sessions: [
+        { sessionHandle: 1, status: "waiting_for_input" },
+        { sessionHandle: 2, status: "idle" },
+      ] as never,
+    });
+    render(<CombinedPanes />);
+    expect(screen.getByTestId("sidebar-count-sessions")).toHaveTextContent("1");
+  });
+
+  it("detaching gives Hive its own window back", async () => {
+    useRailStore.getState().setCombined(true);
+    render(<CombinedPanes />);
+    await userEvent.click(screen.getByTestId("detach-hive"));
+    expect(useRailStore.getState().combined).toBe(false);
+    // The rail cannot show Hive through its own window handle, so this has to
+    // go through the app handle in Rust.
+    expect(invoke).toHaveBeenCalledWith("show_main_window");
   });
 
   it("marks the active pane", () => {

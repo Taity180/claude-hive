@@ -1,5 +1,5 @@
 import { useHubStore } from "../stores/hubStore";
-import { useRailStore, type AnchorId } from "../stores/railStore";
+import { sizeKey, useRailStore, type AnchorId } from "../stores/railStore";
 import { AppIcon } from "./AppIcon";
 
 /** The 3×3 grid, reading order, with the inert centre as null. */
@@ -168,7 +168,8 @@ export function RailSettingsPane() {
   const toggleAppMuted = useRailStore((s) => s.toggleAppMuted);
 
   const agentApps = useHubStore((s) => s.agentApps);
-  const remembered = sizes[anchor];
+  // Mode-keyed: the size shown must be the one this mode will actually use.
+  const remembered = sizes[sizeKey(anchor, combined)];
 
   // Labels for muted apps, falling back to the slug. A muted app the agent has
   // since stopped declaring must still be listed here, or the mute becomes
@@ -369,10 +370,10 @@ export function RailSettingsPane() {
 
         <Row>
           <Label
-            title="Combine with Hive"
-            hint="One window with a sidebar instead of two."
+            title="Bring Hive into the rail"
+            hint="One window with a sidebar. Hive's own window steps aside."
           />
-          <Switch label="Combine with Hive" on={combined} onChange={setCombined} />
+          <Switch label="Bring Hive into the rail" on={combined} onChange={setCombined} />
         </Row>
       </section>
 

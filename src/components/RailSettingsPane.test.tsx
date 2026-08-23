@@ -66,7 +66,7 @@ describe("RailSettingsPane", () => {
     await userEvent.click(screen.getByRole("switch", { name: /hide when nothing/i }));
     expect(useRailStore.getState().hideWhenIdle).toBe(true);
 
-    await userEvent.click(screen.getByRole("switch", { name: /combine with hive/i }));
+    await userEvent.click(screen.getByRole("switch", { name: /bring hive into the rail/i }));
     expect(useRailStore.getState().combined).toBe(true);
   });
 

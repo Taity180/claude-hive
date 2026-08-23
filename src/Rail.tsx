@@ -10,14 +10,17 @@ import { AgentsPane } from "./components/AgentsPane";
 import { TasksPane } from "./components/TasksPane";
 import { RailChrome } from "./components/RailChrome";
 import { RailSettingsPane } from "./components/RailSettingsPane";
+import { CombinedPanes } from "./components/CombinedPanes";
 import { useAgentData } from "./hooks/useAgentData";
 import { useRailResize } from "./hooks/useRailResize";
+import { useRailSettingsSync } from "./hooks/useRailSettingsSync";
 
 export function Rail() {
   useTheme();
   useWebSocket();
   useAgentData();
   useRailResize();
+  useRailSettingsSync();
 
   const open = useRailStore((s) => s.open);
   const setOpen = useRailStore((s) => s.setOpen);
@@ -65,21 +68,22 @@ export function Rail() {
   // Resize and reposition whenever the shape changes. `sizes` is in the deps
   // so a per-anchor resize takes effect without waiting for another trigger.
   useEffect(() => {
-    if (!onScreen || combined) return;
+    if (!onScreen) return;
     const [width, height] = open ? currentSize() : nubSize(anchor, restingForm);
     invoke("place_rail", { anchor, width, height, offset }).catch((err) => {
       console.error("[hive] place_rail failed:", err);
     });
-  }, [onScreen, open, anchor, offset, restingForm, sizes, currentSize]);
+  }, [onScreen, open, combined, anchor, offset, restingForm, sizes, currentSize]);
 
-  // Two copies of the same pane on screen is worse than either alone, so the
-  // rail window steps aside while its panes live inside Hive.
+  // Combined mode moves Hive *into the rail*, so the rail becomes the only
+  // window: it has to be showing and open, not stepping aside.
   useEffect(() => {
     if (!combined) return;
-    invoke("close_rail").catch((err) => {
-      console.error("[hive] close_rail failed:", err);
+    invoke("open_rail").catch((err) => {
+      console.error("[hive] open_rail failed:", err);
     });
-  }, [combined]);
+    setOpen(true);
+  }, [combined, setOpen]);
 
   // Cursor-follow. Polling is the only option — there is no cursor-crossed-
   // monitor event — but 250ms is well below the point where the movement reads
@@ -106,7 +110,24 @@ export function Rail() {
       style={{ background: "var(--hub-bg-solid, #141414)" }}
       data-testid="rail-root"
     >
-      {open ? (
+      {open && combined ? (
+        // Hive lives here now, so the sidebar layout replaces the tab strip —
+        // five panes is more than a row of tabs can carry.
+        <div className="flex flex-col h-full rail-slide-in" data-anchor-side={anchorSide}>
+          <div
+            data-tauri-drag-region
+            className="flex items-center gap-2 px-2 py-1.5 shrink-0 select-none"
+            style={{ borderBottom: "1px solid var(--hub-hair)" }}
+          >
+            <span className="text-[12px] font-semibold" style={{ color: "var(--hub-text)" }}>
+              Hive
+            </span>
+            <span className="flex-1" />
+            <RailChrome onCollapse={() => setOpen(false)} />
+          </div>
+          <CombinedPanes />
+        </div>
+      ) : open ? (
         <div className="flex flex-col h-full rail-slide-in" data-anchor-side={anchorSide}>
           <div
             className="flex items-center gap-1 px-2 pt-2 shrink-0"

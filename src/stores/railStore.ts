@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { broadcastRailSettings } from "./railSync";
 
 export type AnchorId =
   | "left"
@@ -36,8 +37,21 @@ export function isHorizontalAnchor(anchor: AnchorId): boolean {
 }
 
 /** A rail on a horizontal edge is wide; on a vertical edge it is tall. */
-function defaultSize(anchor: AnchorId): [number, number] {
+function defaultSize(anchor: AnchorId, combined: boolean): [number, number] {
+  // Combined mode holds the whole of Hive behind a 132px sidebar, so the plain
+  // rail's 372px would open it as a sliver with the session list cut off.
+  if (combined) return isHorizontalAnchor(anchor) ? [1180, 560] : [760, 780];
   return isHorizontalAnchor(anchor) ? [820, 280] : [372, 620];
+}
+
+/**
+ * Which remembered size applies.
+ *
+ * The two modes want very different shapes on the same edge, so a size dragged
+ * out for one must not become the other's size.
+ */
+export function sizeKey(anchor: AnchorId, combined: boolean): string {
+  return combined ? `${anchor}+hive` : anchor;
 }
 
 /** The resting strip's dimensions, on the short axis of whichever edge it rests against. */
@@ -64,7 +78,7 @@ interface Persisted {
   offset: number;
   restingForm: RestingForm;
   followCursor: boolean;
-  sizes: Partial<Record<AnchorId, [number, number]>>;
+  sizes: Partial<Record<string, [number, number]>>;
   /** Hover is faster; click avoids opening it by brushing past the edge. */
   openOn: OpenOn;
   /** Dim the rail while nothing needs the user. */
@@ -118,6 +132,7 @@ interface RailState extends Persisted {
   setCombined: (combined: boolean) => void;
   toggleAppMuted: (appId: string) => void;
   isAppMuted: (appId: string) => boolean;
+  applyRemoteSettings: (patch: Partial<Persisted>) => void;
 }
 
 export const useRailStore = create<RailState>((set, get) => {
@@ -159,54 +174,73 @@ export const useRailStore = create<RailState>((set, get) => {
     setAnchor: (anchor) => {
       set({ anchor });
       persist();
+      broadcastRailSettings({ anchor });
     },
     setOffset: (offset) => {
       set({ offset });
       persist();
+      broadcastRailSettings({ offset });
     },
     setRestingForm: (restingForm) => {
       set({ restingForm });
       persist();
+      broadcastRailSettings({ restingForm });
     },
     setFollowCursor: (followCursor) => {
       set({ followCursor });
       persist();
+      broadcastRailSettings({ followCursor });
     },
     setOpen: (open) => set({ open }),
     setSizeForAnchor: (a, size) => {
-      set({ sizes: { ...get().sizes, [a]: size } });
+      set({ sizes: { ...get().sizes, [sizeKey(a, get().combined)]: size } });
       persist();
     },
     forgetSizeForAnchor: (a) => {
-      const { [a]: _dropped, ...rest } = get().sizes;
+      // Both modes' sizes for this edge: the settings row reads as "this edge",
+      // not "this edge in whichever mode I happen to be in".
+      const { [a]: _plain, [sizeKey(a, true)]: _combined, ...rest } = get().sizes;
       set({ sizes: rest });
       persist();
     },
     setOpenOn: (openOn) => {
       set({ openOn });
       persist();
+      broadcastRailSettings({ openOn });
     },
     setHideWhenIdle: (hideWhenIdle) => {
       set({ hideWhenIdle });
       persist();
+      broadcastRailSettings({ hideWhenIdle });
     },
     setCombined: (combined) => {
       set({ combined });
       persist();
+      broadcastRailSettings({ combined });
     },
     toggleAppMuted: (appId) => {
       const current = get().mutedApps;
-      set({
-        mutedApps: current.includes(appId)
-          ? current.filter((id) => id !== appId)
-          : [...current, appId],
-      });
+      const mutedApps = current.includes(appId)
+        ? current.filter((id) => id !== appId)
+        : [...current, appId];
+      set({ mutedApps });
       persist();
+      broadcastRailSettings({ mutedApps });
     },
     isAppMuted: (appId) => get().mutedApps.includes(appId),
+    /**
+     * Apply a change that came from the other window.
+     *
+     * Deliberately does not broadcast: echoing it back would have the two
+     * windows bouncing the same patch between them forever.
+     */
+    applyRemoteSettings: (patch) => {
+      set(patch as Partial<RailState>);
+      persist();
+    },
     currentSize: () => {
-      const { anchor, sizes } = get();
-      return sizes[anchor] ?? defaultSize(anchor);
+      const { anchor, sizes, combined } = get();
+      return sizes[sizeKey(anchor, combined)] ?? defaultSize(anchor, combined);
     },
   };
 });
