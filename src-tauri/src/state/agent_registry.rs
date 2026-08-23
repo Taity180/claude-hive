@@ -3,7 +3,7 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 use chrono::Utc;
 
-use crate::models::{Agent, AgentApp};
+use crate::models::{Agent, AgentApp, AppHealth};
 
 /// Agents and the apps they have declared. Mirrors `SessionRegistry`'s shape so
 /// the two read the same way; kept separate because an agent has no working
@@ -82,6 +82,28 @@ impl AgentRegistry {
         self.apps.read().await.get(id).cloned().unwrap_or_default()
     }
 
+    /// Add `app_id` if the agent has not declared it. Returns whether it added.
+    ///
+    /// The safety net for an agent that posts without calling
+    /// `agent_apps_sync`: without this, a post is attributed to an app that
+    /// appears nowhere in the bar, so the user can neither filter to it nor
+    /// mute it. The label can only be the slug — nothing better was sent.
+    ///
+    /// `sync_apps` stays authoritative and can remove what this added.
+    pub async fn ensure_app(&self, agent_id: &str, app_id: &str) -> bool {
+        let mut apps = self.apps.write().await;
+        let entry = apps.entry(agent_id.to_string()).or_default();
+        if entry.iter().any(|a| a.id == app_id) {
+            return false;
+        }
+        entry.push(AgentApp {
+            id: app_id.to_string(),
+            label: app_id.to_string(),
+            health: AppHealth::Ok,
+        });
+        true
+    }
+
     /// Every app across every agent, tagged with its owner so the bar can show
     /// two agents that both expose Gmail without collapsing them.
     pub async fn all_apps(&self) -> Vec<(String, AgentApp)> {
@@ -105,7 +127,6 @@ impl Default for AgentRegistry {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::AppHealth;
 
     fn app(id: &str, label: &str) -> AgentApp {
         AgentApp { id: id.into(), label: label.into(), health: AppHealth::Ok }
@@ -183,6 +204,44 @@ mod tests {
         reg.sync_apps("a1", vec![app("gmail", "Gmail")]).await;
         reg.sync_apps("a2", vec![app("gmail", "Gmail")]).await;
         assert_eq!(reg.all_apps().await.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn ensure_app_adds_an_undeclared_app_once() {
+        let reg = AgentRegistry::new();
+        assert!(reg.ensure_app("a1", "gmail").await, "first sighting adds it");
+        assert!(!reg.ensure_app("a1", "gmail").await, "second is a no-op");
+        assert_eq!(reg.apps("a1").await.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn ensure_app_labels_it_from_the_slug() {
+        // Nothing better is available: the agent never declared a label.
+        let reg = AgentRegistry::new();
+        reg.ensure_app("a1", "made-up-thing").await;
+        assert_eq!(reg.apps("a1").await[0].label, "made-up-thing");
+    }
+
+    #[tokio::test]
+    async fn a_later_sync_can_still_replace_an_auto_added_app() {
+        let reg = AgentRegistry::new();
+        reg.ensure_app("a1", "gmail").await;
+        reg.sync_apps("a1", vec![]).await;
+        assert!(reg.apps("a1").await.is_empty(), "sync stays authoritative");
+    }
+
+    #[tokio::test]
+    async fn ensure_app_does_not_disturb_a_declared_app() {
+        let reg = AgentRegistry::new();
+        reg.sync_apps("a1", vec![AgentApp {
+            id: "gmail".into(),
+            label: "Gmail".into(),
+            health: AppHealth::Degraded,
+        }])
+        .await;
+        assert!(!reg.ensure_app("a1", "gmail").await);
+        assert_eq!(reg.apps("a1").await[0].label, "Gmail", "the declared label survives");
+        assert_eq!(reg.apps("a1").await[0].health, AppHealth::Degraded);
     }
 
     #[tokio::test]

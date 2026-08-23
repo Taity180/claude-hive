@@ -155,6 +155,18 @@ async fn handle_tools_call(
                 .and_then(|t| serde_json::from_value(json!(t)).ok())
                 .unwrap_or(MessageType::Info);
 
+            // Safety net: a post from an app the agent never declared would
+            // otherwise be attributed to something absent from the bar, leaving
+            // the user unable to filter to it or mute it.
+            if let Some(ref app) = app_id {
+                if state.agents.ensure_app(agent_id, app).await {
+                    let _ = state.event_tx.send(WsEvent::AgentAppsChanged {
+                        agent_id: agent_id.to_string(),
+                        apps: state.agents.apps(agent_id).await,
+                    });
+                }
+            }
+
             let post = state
                 .agent_feed
                 .post(agent_id, &agent.name, app_id, content.to_string(), post_type)
@@ -219,6 +231,18 @@ async fn handle_tools_call(
                 .and_then(|v| v.as_str())
                 .and_then(|v| chrono::DateTime::parse_from_rfc3339(v).ok())
                 .map(|dt| dt.with_timezone(&chrono::Utc));
+
+            // Safety net: a post from an app the agent never declared would
+            // otherwise be attributed to something absent from the bar, leaving
+            // the user unable to filter to it or mute it.
+            if let Some(ref app) = app_id {
+                if state.agents.ensure_app(agent_id, app).await {
+                    let _ = state.event_tx.send(WsEvent::AgentAppsChanged {
+                        agent_id: agent_id.to_string(),
+                        apps: state.agents.apps(agent_id).await,
+                    });
+                }
+            }
 
             let task = state
                 .tasks
@@ -686,6 +710,43 @@ mod tests {
         let value = call(&state, "tasks_upsert", json!({ "title": "Sneaky" })).await;
         assert!(value["result"]["isError"].as_bool().unwrap_or(false));
         assert!(state.tasks.list().await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn posting_from_an_undeclared_app_still_shows_it_in_the_bar() {
+        // Otherwise the post arrives attributed to an app that appears nowhere,
+        // and the user cannot filter to or mute it.
+        let (state, _dir) = test_state();
+        state.agents.upsert("a1", "Grok".into(), None).await;
+
+        call(&state, "agent_post", json!({ "content": "hi", "app_id": "surprise" })).await;
+
+        let apps = state.agents.apps("a1").await;
+        assert_eq!(apps.len(), 1);
+        assert_eq!(apps[0].id, "surprise");
+    }
+
+    #[tokio::test]
+    async fn a_task_from_an_undeclared_app_also_registers_it() {
+        let (state, _dir) = test_state();
+        state.agents.upsert("a1", "Grok".into(), None).await;
+        call(&state, "tasks_upsert", json!({ "title": "Thing", "app_id": "surprise" })).await;
+        assert_eq!(state.agents.apps("a1").await.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn a_declared_app_is_not_re_added_by_a_post() {
+        let (state, _dir) = test_state();
+        state.agents.upsert("a1", "Grok".into(), None).await;
+        call(&state, "agent_apps_sync", json!({
+            "apps": [{ "id": "gmail", "label": "Gmail" }]
+        })).await;
+
+        call(&state, "agent_post", json!({ "content": "hi", "app_id": "gmail" })).await;
+
+        let apps = state.agents.apps("a1").await;
+        assert_eq!(apps.len(), 1);
+        assert_eq!(apps[0].label, "Gmail", "the declared label survives");
     }
 
     #[tokio::test]
